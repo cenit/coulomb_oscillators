@@ -130,6 +130,15 @@ inline __host__ __device__ uint32_t bitceil(uint32_t val)
 #endif
 }
 
+inline __host__ __device__ float reciprocal_sqrt(float x)
+{
+	return rsqrtf(x);
+}
+inline __host__ __device__ double reciprocal_sqrt(double x)
+{
+	return rsqrt(x);
+}
+
 #endif // !CONSTANTS_CUDA_H
 
 

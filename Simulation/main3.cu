@@ -17,13 +17,16 @@
 /*
 
 Compilation:
-nvcc main3.cu -o nbco3 -O3 -arch=sm_75 --expt-relaxed-constexpr <std=c++20>
+nvcc main3.cu -o nbco3 -O3 -ftz=true -arch=sm_75 --expt-relaxed-constexpr <std=c++20>
 
-Use '--std c++20' for Windows (Visual Studio 2022) or '-std=c++20' for Linux (GCC 10-12)
+Use `--std c++20` for Windows (Visual Studio 2022) or `-std=c++20` for Linux (GCC 10-12)
+`-ftz=true` (flushing to zero) will ignore denormal numbers and treat them as zero
 
 For profiling:
 nvprof nbco3 -test
 ncu -f -o profile nbco3 -test
+
+ncu --section SchedulerStats --section WarpStateStats --section SourceCounters -o profile nbco3 -test -n 100000 -r 2 -p 4
 
 For debugging:
 nvcc -lineinfo main3.cu -o nbco3 --expt-relaxed-constexpr <std=c++20>

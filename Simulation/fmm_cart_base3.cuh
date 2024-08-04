@@ -21,15 +21,30 @@
 
 #include "fmm_cart_base.cuh"
 
-
 inline __host__ __device__ SCAL coeff13(int n, int m)
 // a coefficient used in the calculation of the gradient
 // returns (-1)^m * (2n - 2m - 1)!!
 // assumes m <= n/2 and n >= 1
-// 2n - 2m - 1 must be smaller than 79 (otherwise bad things will occur)
 {
 	return (SCAL)paritysign(m) * static_odfactorial(2 * (n - m) - 1);
 	// for DIM > 3, see Shanker, Huang, 2007
+}
+
+inline __host__ __device__ SCAL dyn_coeff13(int n, int m)
+// a coefficient used in the calculation of the gradient
+// returns (-1)^m * (2n - 2m - 1)!!
+// assumes m <= n/2 and n >= 1
+{
+	return paritysign(m) * dfactorial(2 * (n - m) - 1);
+	// for DIM > 3, see Shanker, Huang, 2007
+}
+
+inline __host__ __device__ SCAL dyn_coeff2(int n, int m)
+// a coefficient used in the calculation of the gradient
+// returns n! / (2^m * m! * (n - 2m)!)
+// assumes m <= n/2
+{
+	return SCAL(factorialfrac(n, m)) / (SCAL(power_of_2(m)) * SCAL(factorial(n - 2*m)));
 }
 
 /**
@@ -427,7 +442,7 @@ inline __host__ __device__ void contract_traceless_ma3(SCAL *__restrict__ C, con
 
 template <bool b_atomic = false>
 inline __device__ void contract_traceless_ma_coalesced3(SCAL *__restrict__ C, const SCAL *__restrict__ A, const SCAL *__restrict__ B,
-                                                        SCAL c, int nA, int nB)
+                                                        SCAL c, int nA, int nB, int tid, int bdim)
 // contract two symmetric tensors A, B into a symmetric tensor of order |nA-nB|
 // multiply it by a scalar c and sum (accumulate) the result to C
 // we can reduce complexity by knowing that the result must be traceless
@@ -445,7 +460,7 @@ inline __device__ void contract_traceless_ma_coalesced3(SCAL *__restrict__ C, co
 	int kjb = k_coeff(jb, nB);
 	const SCAL *Bj = B + jb;
 	int nelems = tracelesselems3(nC);
-	for (int i = threadIdx.x; i < nelems; i += blockDim.x)
+	for (int i = tid; i < nelems; i += bdim)
 	{
 		int z = traceless_z_i(i, nC);
 		int x = traceless_x_i(i, nC, z);
@@ -622,13 +637,13 @@ inline __host__ __device__ void traceless_refine3(SCAL *A, int n)
 		}
 }
 
-inline __device__ void traceless_refine_coalesced3(SCAL *A, int n)
+inline __device__ void traceless_refine_coalesced3(SCAL *A, int n, int tid, int bdim, int mask)
 // build a traceless tensor using symmetric index notation
 // O(n^2)
 {
 	for (int z = 2; z <= n; z += 2)
 	{
-		for (int xdz = threadIdx.x; xdz <= 2*(n-z); xdz += blockDim.x)
+		for (int xdz = tid; xdz <= 2*(n-z); xdz += bdim)
 		{
 			int zp = z + xdz / (n-z+1);
 			int x = n-zp - xdz % (n-z+1);
@@ -637,7 +652,7 @@ inline __device__ void traceless_refine_coalesced3(SCAL *A, int n)
 			int jsy = symmetric_i_x_z(x, zp-2, n);
 			A[i] = -A[jsx] - A[jsy];
 		}
-		__syncthreads();
+		__syncwarp(mask);
 	}
 }
 
@@ -684,7 +699,7 @@ inline __host__ __device__ void gradient_exact3(SCAL *grad, int n, VEC d, SCAL r
 						for (int k3 = 0; k3 <= z/2; ++k3)
 						{
 							int m = k1+k2+k3;
-							t3 += (SCAL)coeff13(n, m) * coeff2(z, k3) * binarypow(d.z, z - 2*k3);
+							t3 += coeff13(n, m) * coeff2(z, k3) * binarypow(d.z, z - 2*k3);
 						}
 						t2 += t3 * coeff2(y, k2) * binarypow(d.y, y - 2*k2);
 					}
@@ -719,7 +734,7 @@ inline __host__ __device__ void gradient3(SCAL *grad, int n, VEC d, SCAL r, SCAL
 					for (int k2 = 0; k2 <= y/2; ++k2)
 					{
 						int m = k1+k2;
-						t2 += (SCAL)coeff13(n, m) * coeff2(y, k2) * binarypow(d.y, y - 2*k2);
+						t2 += coeff13(n, m) * coeff2(y, k2) * binarypow(d.y, y - 2*k2);
 					}
 					t1 += t2 * coeff2(x, k1) * binarypow(d.x, x - 2*k1);
 				}
@@ -728,7 +743,7 @@ inline __host__ __device__ void gradient3(SCAL *grad, int n, VEC d, SCAL r, SCAL
 	}
 }
 
-inline __device__ void gradient_coalesced3(SCAL *grad, int n, VEC d, SCAL r, SCAL c = 1)
+inline __device__ void gradient_coalesced3(SCAL *grad, int n, VEC d, SCAL r, int tid, int bdim, SCAL c = 1)
 // calculate the gradient of -log(r) of order n i.e. -nabla^n log(r), which is a n-order symmetric tensor.
 // r is the distance, d is the unit vector
 // this version assumes r2 >> EPS2 which ease the computation significantly (from O(n^5) to O(n^3))
@@ -737,14 +752,14 @@ inline __device__ void gradient_coalesced3(SCAL *grad, int n, VEC d, SCAL r, SCA
 {
 	if (n == 0)
 	{
-		if (threadIdx.x == 0)
+		if (tid == 0)
 			grad[0] = c/r;
 	}
 	else
 	{
 		SCAL C = (SCAL)paritysign(n) * binarypow(r, -n-1) * c;
 		int nelems = tracelesselems3(n);
-		for (int i = threadIdx.x; i < nelems; i += blockDim.x)
+		for (int i = tid; i < nelems; i += bdim)
 		{
 			int z = traceless_z_i(i, n);
 			int x = traceless_x_i(i, n, z);
@@ -756,7 +771,7 @@ inline __device__ void gradient_coalesced3(SCAL *grad, int n, VEC d, SCAL r, SCA
 				for (int k2 = 0; k2 <= y/2; ++k2)
 				{
 					int m = k1+k2;
-					t2 += (SCAL)coeff13(n, m) * coeff2(y, k2) * binarypow(d.y, y - 2*k2);
+					t2 += coeff13(n, m) * coeff2(y, k2) * binarypow(d.y, y - 2*k2);
 				}
 				t1 += t2 * coeff2(x, k1) * binarypow(d.x, x - 2*k1);
 			}
@@ -1209,7 +1224,8 @@ inline __host__ __device__ void m2l_acc3(SCAL *__restrict__ Ltuple, SCAL *__rest
 
 template <bool b_atomic = false, bool no_dipole = false>
 inline __device__ void m2l_acc_coalesced3(SCAL *__restrict__ Ltuple, SCAL *__restrict__ temp, const SCAL *__restrict__ Mtuple,
-                                          int nM, int nL, VEC d, SCAL r, int minm = 0, int maxm = -1, int maxn = -1)
+                                          int nM, int nL, VEC d, SCAL r, int tid, int bdim, int mask,
+                                          int minm = 0, int maxm = -1, int maxn = -1)
 // symmetric multipole to traceless local expansion + accumulate
 // Mtuple is a tuple of multipole tensors of orders from 0 to nM (inclusive)
 // returns a tuple of local expansion tensors of orders from 0 to nL (inclusive)
@@ -1220,19 +1236,21 @@ inline __device__ void m2l_acc_coalesced3(SCAL *__restrict__ Ltuple, SCAL *__res
 {
 	maxm = (maxm == -1) ? nM+nL : maxm;
 	maxn = (maxn == -1) ? nL : maxn;
+	SCAL scal = binarypow(r, maxm+1) * inv_factorial(maxm); // rescaling to avoid overflowing for single-precision fp
 	for (int m = minm; m <= maxm; ++m)
 	{
-		gradient_coalesced3(temp, m, d, r);
-		__syncthreads();
-		traceless_refine_coalesced3(temp, m);
+		gradient_coalesced3(temp, m, d, r, tid, bdim, scal);
+		__syncwarp(mask);
+		traceless_refine_coalesced3(temp, m, tid, bdim, mask);
 		for (int n = max(minm, m-nM); n <= min(maxn, m); ++n)
 		{
 			int mn = m-n; // 0 <= mn <= nM
 			if (no_dipole && mn == 1)
 				continue;
-			SCAL C = inv_factorial(n);
-			contract_traceless_ma_coalesced3<b_atomic>(Ltuple + tracelessoffset3(n), Mtuple + symmetricoffset3(mn), temp, C, mn, m);
+			SCAL C = inv_factorial(n)/scal;
+			contract_traceless_ma_coalesced3<b_atomic>(Ltuple + tracelessoffset3(n), Mtuple + symmetricoffset3(mn), temp, C, mn, m, tid, bdim);
 		}
+		__syncwarp(mask);
 	}
 }
 

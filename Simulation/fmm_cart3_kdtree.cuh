@@ -614,13 +614,24 @@ inline __host__ __device__ void fmm_c2c3_kdtree_krnl(fmmTree_kd tree, const int2
                                                      int begi, int endi, int stride, SCAL *tempi)
 // cell to cell interaction
 {
+	int tempsize = (tree.p+1)*(tree.p+2)/2;
 	int offM = symmetricoffset3(tree.p);
 	int offL = tracelessoffset3(tree.p+1);
 	int offL2 = tracelessoffset3(tree.p-1);
+
+	int stempsize = tempsize;
+	int soffM = offM;
+	int soffL = offL;
+	if (stempsize % 2 == 0)
+		++stempsize; // to reduce bank conflicts
+	if (soffM % 2 == 0)
+		++soffM; // to reduce bank conflicts
+	if (soffL % 2 == 0)
+		++soffL; // to reduce bank conflicts
 #ifdef __CUDA_ARCH__
 	extern __shared__ SCAL smems[];
-	SCAL *smp = smems + (tree.p+1)*(tree.p+2)/2*blockDim.x + offM*threadIdx.x;
-	SCAL *sloc = smems + ((tree.p+1)*(tree.p+2)/2+offM)*blockDim.x + offL*threadIdx.x;
+	SCAL *smp = smems + stempsize*blockDim.x + soffM*threadIdx.x;
+	SCAL *sloc = smems + (stempsize+soffM)*blockDim.x + soffL*threadIdx.x;
 #endif
 
 	for (int i = begi; i < endi; i += stride)
@@ -706,19 +717,41 @@ __global__ void fmm_c2c3_kdtree2(fmmTree_kd tree, const int2 *m2l_list, const in
 __global__ void fmm_c2c3_kdtree_coalesced(fmmTree_kd tree, const int2 *m2l_list, const int *m2l_n, SCAL d_EPS2)
 // cell to cell interaction
 {
+	int tempsize = (tree.p+1)*(tree.p+2)/2;
 	int offM = symmetricoffset3(tree.p);
 	int offL = tracelessoffset3(tree.p+1);
+	int offL2 = tracelessoffset3(tree.p-1);
 
-	extern __shared__ SCAL smems[]; // (p+1)*(p+2)/2 + offM
-	SCAL *temp = smems;
-	SCAL *smp = smems + (tree.p+1)*(tree.p+2)/2;
+	extern __shared__ SCAL smems[];
 	int tid = threadIdx.x;
+	int wdim = min(bitceil(tree.p), 32u);
+	int wid = tid/wdim; // (sub)warp id
+	int lid = tid%wdim; // lane id
 	int bdim = blockDim.x;
+	int nwarps = bdim/wdim;
 	int bid = blockIdx.x;
 	int gdim = gridDim.x;
-	int end = *m2l_n;
+	int stride = gdim*nwarps;
 
-	for (int i = bid; i < end; i += gdim)
+	int stempsize = tempsize;
+	int soffM = offM;
+	int soffL = offL;
+	if (stempsize % 2 == 0)
+		++stempsize; // to reduce bank conflicts
+	if (soffM % 2 == 0)
+		++soffM; // to reduce bank conflicts
+	if (soffL % 2 == 0)
+		++soffL; // to reduce bank conflicts
+
+	SCAL *temp = smems + stempsize*wid;
+	SCAL *smp = smems + stempsize*nwarps + soffM*wid;
+	SCAL *sloc = smems + (stempsize + soffM)*nwarps + soffL*wid;
+
+	int beg = bid*nwarps+wid;
+	int end = *m2l_n;
+	unsigned loop_mask = __ballot_sync(0xFFFFFFFF, beg < end);
+
+	for (int i = beg; i < end; i += stride)
 	{
 		int n1 = m2l_list[i].x;
 		int n2 = m2l_list[i].y;
@@ -731,14 +764,33 @@ __global__ void fmm_c2c3_kdtree_coalesced(fmmTree_kd tree, const int2 *m2l_list,
 		SCAL r = sqrt(dot(d, d) + d_EPS2);
 		d /= r;
 
-		for (int j = tid; j < offM; j += bdim)
+		for (int j = lid; j < offM; j += wdim)
 			smp[j] = mp2[j];
-		m2l_acc_coalesced3<true, true>(loc1, temp, smp, tree.p, tree.p, d, r, 1, tree.p);
-		__syncthreads();
-		for (int j = tid; j < offM; j += bdim)
+		for (int j = 1+lid; j < offL; j += wdim)
+			sloc[j] = 0;
+		__syncwarp(loop_mask);
+		SCAL mp = SCAL(1) / smp[0];
+		m2l_acc_coalesced3<false, true>(sloc, temp, smp, tree.p, tree.p, d, r, lid, wdim, loop_mask, 1, tree.p);
+		for (int j = 1+lid; j < offL; j += wdim)
+			myAtomicAdd(loc1 + j, sloc[j]);
+		__syncwarp(loop_mask);
+		for (int j = lid; j < offM; j += wdim)
 			smp[j] = mp1[j];
-		m2l_acc_coalesced3<true, true>(loc2, temp, smp, tree.p, tree.p, -d, r, 1, tree.p);
-		__syncthreads();
+		for (int j = 1+lid; j < offL2; j += wdim)
+			sloc[j] = 0;
+		__syncwarp(loop_mask);
+		mp *= smp[0];
+		if (tree.p >= 3)
+			m2l_acc_coalesced3<false, true>(sloc, temp, smp, tree.p, tree.p, -d, r, lid, wdim, loop_mask, 1, tree.p, tree.p-2);
+		for (int j = 1+lid; j < offL2; j += wdim)
+			myAtomicAdd(loc2 + j, sloc[j]);
+		for (int j = offL2+lid; j < offL; j += wdim)
+		{
+			// exploiting symmetry relations
+			SCAL c = mp*paritysign(sqrtf(j));
+			myAtomicAdd(loc2 + j, c*sloc[j]);
+		}
+		loop_mask = __ballot_sync(loop_mask, i+stride < end);
 	}
 }
 
@@ -875,7 +927,7 @@ __global__ void fmm_p2p3_kdtree_coalesced(VEC *__restrict__ a, const fmmTree_kd 
                                           const int2 *p2p_list, const int *p2p_n, int mlt_max, SCAL d_EPS2)
 // particle to particle interaction
 {
-	extern __shared__ VEC smem[]; // 2*mlt_max*sizeof(VEC)*nwarps
+	extern __shared__ VEC smem[];
 	int tid = threadIdx.x;
 	int wdim = min(bitceil(mlt_max), 32u);
 	int wid = tid/wdim; // (sub)warp id
@@ -933,8 +985,7 @@ __global__ void fmm_p2p3_kdtree_coalesced(VEC *__restrict__ a, const fmmTree_kd 
 				int gg = (g+lid) % mlt2;
 				VEC d = p1h - sp2[gg];
 				SCAL k = dot(d, d) + d_EPS2;
-				k = (SCAL)1 / k;
-				k *= sqrt(k);
+				k = (1/k)*reciprocal_sqrt(k);
 				d *= k;
 
 				atmp += d;
@@ -1051,7 +1102,7 @@ inline __host__ __device__ void fmm_p2p3_self_kdtree_krnl(VEC *__restrict__ a, c
 // particle to particle interaction
 {
 #ifdef __CUDA_ARCH__
-	extern __shared__ VEC smem[]; // mlt_max*blockDim.x*sizeof(VEC)
+	extern __shared__ VEC smem[];
 	if (mlt_max % 2 == 0)
 		++mlt_max; // to reduce bank conflicts
 	VEC *sp = smem + mlt_max*threadIdx.x;
@@ -1408,8 +1459,8 @@ inline __host__ __device__ int p2p1_smem(int blocksize)
 #else
 	int mlt_max = ::h_mlt_max;
 #endif
-	int wsize = min(bitceil(mlt_max), 32u);
-	int nwarps = blocksize/wsize;
+	int wdim = min(bitceil(mlt_max), 32u);
+	int nwarps = blocksize/wdim;
 	if (mlt_max % 2 == 0)
 		++mlt_max; // to reduce bank conflicts
 	return 2*mlt_max*nwarps*sizeof(VEC);
@@ -1428,11 +1479,43 @@ inline __host__ __device__ int p2p_self_smem(int blocksize)
 inline __host__ __device__ int c2c0_smem(int blocksize)
 {
 #ifdef __CUDA_ARCH__
-	return ((*::d_fmm_order+1)*(*::d_fmm_order+2)/2 + symmetricoffset3(*::d_fmm_order)
-		+ tracelessoffset3(*::d_fmm_order+1))*blocksize*sizeof(SCAL);
+	int order = *::d_fmm_order;
 #else
-	return ((::fmm_order+1)*(::fmm_order+2)/2 + symmetricoffset3(::fmm_order) + tracelessoffset3(::fmm_order+1))*blocksize*sizeof(SCAL);
+	int order = ::fmm_order;
 #endif
+	int tempsize = (order+1)*(order+2)/2;
+	int offM = symmetricoffset3(order);
+	int offL = tracelessoffset3(order+1);
+
+	if (tempsize % 2 == 0)
+		++tempsize; // to reduce bank conflicts
+	if (offM % 2 == 0)
+		++offM; // to reduce bank conflicts
+	if (offL % 2 == 0)
+		++offL; // to reduce bank conflicts
+	return (tempsize + offM + offL)*blocksize*sizeof(SCAL);
+}
+inline __host__ __device__ int c2c1_smem(int blocksize)
+{
+#ifdef __CUDA_ARCH__
+	int order = *::d_fmm_order;
+#else
+	int order = ::fmm_order;
+#endif
+	int tempsize = (order+1)*(order+2)/2;
+	int offM = symmetricoffset3(order);
+	int offL = tracelessoffset3(order+1);
+
+	int wdim = min(bitceil(order), 32u);
+	int nwarps = blocksize/wdim;
+
+	if (tempsize % 2 == 0)
+		++tempsize; // to reduce bank conflicts
+	if (offM % 2 == 0)
+		++offM; // to reduce bank conflicts
+	if (offL % 2 == 0)
+		++offL; // to reduce bank conflicts
+	return (tempsize + offM + offL)*nwarps*sizeof(SCAL);
 }
 inline __host__ __device__ int c2c2_smem(int blocksize)
 {
@@ -1597,14 +1680,13 @@ void fmm_cart3_kdtree(VEC *p, VEC *a, int n, const SCAL* param)
 			++smoff;
 		gpuErrchk(cudaOccupancyMaxPotentialBlockSize(&p2p2_bt.x, &p2p2_bt.y, fmm_p2p3_kdtree_coalesced2, smoff*sizeof(VEC)));
 		gpuErrchk(cudaOccupancyMaxPotentialBlockSize(&p2p_self2_bt.x, &p2p_self2_bt.y, fmm_p2p3_self_kdtree_coalesced, smoff*sizeof(VEC)));
-		gpuErrchk(cudaOccupancyMaxPotentialBlockSize(&c2c1_bt.x, &c2c1_bt.y, fmm_c2c3_kdtree_coalesced,
-			((order+1)*(order+2)/2 + symmetricoffset3(order))*sizeof(SCAL)));
 
 		gpuErrchk(cudaOccupancyMaxPotentialBlockSizeVariableSMem(&buildTree_bt.x, &buildTree_bt.y, fmm_buildTree3_kdtree, buildTree_smem));
 		gpuErrchk(cudaOccupancyMaxPotentialBlockSizeVariableSMem(&p2p0_bt.x, &p2p0_bt.y, fmm_p2p3_kdtree, p2p0_smem));
 		gpuErrchk(cudaOccupancyMaxPotentialBlockSizeVariableSMem(&p2p1_bt.x, &p2p1_bt.y, fmm_p2p3_kdtree_coalesced, p2p1_smem));
 		gpuErrchk(cudaOccupancyMaxPotentialBlockSizeVariableSMem(&p2p_self_bt.x, &p2p_self_bt.y, fmm_p2p3_self_kdtree, p2p_self_smem));
 		gpuErrchk(cudaOccupancyMaxPotentialBlockSizeVariableSMem(&c2c0_bt.x, &c2c0_bt.y, fmm_c2c3_kdtree, c2c0_smem));
+		gpuErrchk(cudaOccupancyMaxPotentialBlockSizeVariableSMem(&c2c1_bt.x, &c2c1_bt.y, fmm_c2c3_kdtree_coalesced, c2c1_smem));
 		gpuErrchk(cudaOccupancyMaxPotentialBlockSizeVariableSMem(&c2c2_bt.x, &c2c2_bt.y, fmm_c2c3_kdtree2, c2c2_smem));
 		gpuErrchk(cudaOccupancyMaxPotentialBlockSizeVariableSMem(&pushl_bt.x, &pushl_bt.y, fmm_pushl3_kdtree, pushl_smem));
 		gpuErrchk(cudaOccupancyMaxPotentialBlockSizeVariableSMem(&pushl2_bt.x, &pushl2_bt.y, fmm_pushl3_kdtree2, pushl2_smem));
