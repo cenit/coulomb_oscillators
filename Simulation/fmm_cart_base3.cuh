@@ -410,7 +410,12 @@ inline __host__ __device__ void contract_traceless_ma3(SCAL *__restrict__ C, con
 	int jb = symmetric_i_x_z(0, 0, nB);
 	int kjb = k_coeff(jb, nB);
 	const SCAL *Bj = B + jb;
-	int i = 0;
+#ifdef __CUDA_ARCH__
+	const SCAL *coeff = d_contract_coeff + d_contract_off[nB];
+#else
+	const SCAL *coeff = h_contract_coeff + h_contract_off[nB];
+#endif
+	int i = 0, j;
 	for (int z = 0; z <= min(1, nC); ++z)
 		for (int x = nC-z; x >= 0; --x)
 		{
@@ -419,12 +424,13 @@ inline __host__ __device__ void contract_traceless_ma3(SCAL *__restrict__ C, con
 			int kja = k_coeff(ja, nA);
 			const SCAL *Aj = A + ja;
 			const SCAL *Ajk, *Bjk;
+			j = 0;
 			for (int kz = 0; kz <= nB; ++kz)
 			{
 				Ajk = Aj + kz*(nA - kja) - kz*(kz - 1)/2;
 				Bjk = Bj + kz*(nB - kjb) - kz*(kz - 1)/2;
 				for (int kx = 0; kx <= nB-kz; ++kx)
-					t += (SCAL)trinomial(nB, kx, kz) * Ajk[-kx] * Bjk[-kx];
+					t += coeff[j++] * Ajk[-kx] * Bjk[-kx];
 			}
 			if constexpr (b_atomic)
 			{
@@ -491,6 +497,62 @@ inline __device__ void contract_traceless_ma_coalesced3(SCAL *__restrict__ C, co
 }
 
 template <bool b_atomic = false>
+inline __device__ void contract_traceless_ma_coalesced_tuple3(SCAL *__restrict__ Ctuple, const SCAL *__restrict__ Atuple, const SCAL *__restrict__ B,
+                                                              SCAL c, int nAmin, int nAmax, int nB, int tid, int bdim)
+// contract two symmetric tensors A, B into a symmetric tensor of order |nA-nB|
+// multiply it by a scalar c and sum (accumulate) the result to C
+// we can reduce complexity by knowing that the result must be traceless
+// C contains only the indipendent elements of the result, the other elements
+// may be built a posteriori through the function traceless_refine
+// O(|nA-nB| * min(nA,nB)^2)
+{
+	// assuming nAmax >= nAmin >= nB
+	int jb = symmetric_i_x_z(0, 0, nB);
+	int kjb = k_coeff(jb, nB);
+	const SCAL *Bj = B + jb;
+	int offmin = tracelessoffset3(nAmin-nB);
+	int offmax = tracelessoffset3(nAmax-nB+1);
+#ifdef __CUDA_ARCH__
+	const SCAL *coeff = d_contract_coeff + d_contract_off[nB];
+#else
+	const SCAL *coeff = h_contract_coeff + h_contract_off[nB];
+#endif
+	int j;
+	for (int i = offmin+tid; i < offmax; i += bdim)
+	{
+		int nC = sqrtf(i);
+		int nA = nC + nB;
+		int ind = i - tracelessoffset3(nC);
+		int z = traceless_z_i(ind, nC);
+		int x = traceless_x_i(ind, nC, z);
+		SCAL t(0);
+		int ja = symmetric_i_x_z(x, z, nA);
+		int kja = k_coeff(ja, nA);
+		const SCAL *Aj = Atuple + symmetricoffset3(nA) + ja;
+		const SCAL *Ajk, *Bjk;
+		j = 0;
+		for (int kz = 0; kz <= nB; ++kz)
+		{
+			Ajk = Aj + kz*(nA - kja) - kz*(kz - 1)/2;
+			Bjk = Bj + kz*(nB - kjb) - kz*(kz - 1)/2;
+			for (int kx = 0; kx <= nB-kz; ++kx)
+				t += coeff[j++] * Ajk[-kx] * Bjk[-kx];
+		}
+		if constexpr (b_atomic)
+		{
+#ifdef __CUDA_ARCH__
+			myAtomicAdd(Ctuple + i, c*t*inv_factorial(nC));
+#else
+			std::atomic_ref<SCAL> atomicC(Ctuple[i]);
+			atomicC += c*t*inv_factorial(nC);
+#endif
+		}
+		else
+			Ctuple[i] += c*t*inv_factorial(nC);
+	}
+}
+
+template <bool b_atomic = false>
 inline __host__ __device__ void contract_traceless2_ma3(SCAL *__restrict__ C, const SCAL *__restrict__ A,
                                                                               const SCAL *__restrict__ B,
                                                         SCAL c, int nA, int nB)
@@ -548,7 +610,12 @@ inline __host__ __device__ void static_contract_traceless_ma3(SCAL *__restrict__
 		constexpr int jb = symmetric_i_x_z(0, 0, nB);
 		int kjb = k_coeff(jb, nB);
 		const SCAL *Bj = B + jb;
-		int i = 0;
+#ifdef __CUDA_ARCH__
+		static constexpr const SCAL *coeff = d_contract_coeff + d_contract_off[nB];
+#else
+		static constexpr const SCAL *coeff = h_contract_coeff + h_contract_off[nB];
+#endif
+		int i = 0, j;
 #pragma unroll
 		for (int z = 0; z <= static_min(1, nC); ++z)
 #pragma unroll
@@ -559,6 +626,7 @@ inline __host__ __device__ void static_contract_traceless_ma3(SCAL *__restrict__
 				int kja = k_coeff(ja, nA);
 				const SCAL *Aj = A + ja;
 				const SCAL *Ajk, *Bjk;
+				j = 0;
 #pragma unroll
 				for (int kz = 0; kz <= nB; ++kz)
 				{
@@ -566,7 +634,7 @@ inline __host__ __device__ void static_contract_traceless_ma3(SCAL *__restrict__
 					Bjk = Bj + kz*(nB - kjb) - kz*(kz - 1)/2;
 #pragma unroll
 					for (int kx = 0; kx <= nB-kz; ++kx)
-						t += (SCAL)trinomial(nB, kx, kz) * Ajk[-kx] * Bjk[-kx];
+						t += coeff[j++] * Ajk[-kx] * Bjk[-kx];
 				}
 				if constexpr (b_atomic)
 				{
@@ -711,7 +779,7 @@ inline __host__ __device__ void gradient_exact3(SCAL *grad, int n, VEC d, SCAL r
 }
 
 inline __host__ __device__ void gradient3(SCAL *grad, int n, VEC d, SCAL r, SCAL c = 1)
-// calculate the gradient of -log(r) of order n i.e. -nabla^n log(r), which is a n-order symmetric tensor.
+// calculate the gradient of 1/r of order n i.e. nabla^n 1/r, which is a n-order symmetric tensor.
 // r is the distance, d is the unit vector
 // this version assumes r2 >> EPS2 which ease the computation significantly (from O(n^5) to O(n^3))
 // if this assumption does not hold, accuracy will be reduced
@@ -719,32 +787,52 @@ inline __host__ __device__ void gradient3(SCAL *grad, int n, VEC d, SCAL r, SCAL
 {
 	if (n == 0)
 		grad[0] = c/r;
+	else if (n == 1)
+	{
+		SCAL C = -c/(r*r);
+		grad[0] = C*d.x;
+		grad[1] = C*d.y;
+		grad[2] = C*d.z;
+	}
 	else
 	{
+		SCAL x2 = d.x*d.x, y2 = d.y*d.y;
 		SCAL C = (SCAL)paritysign(n) * binarypow(r, -n-1) * c;
-		int i = 0;
+		SCAL powx, powy, powz = 1;
+#ifdef __CUDA_ARCH__
+		const SCAL *coeff = d_grad_coeff + d_grad_off[n];
+#else
+		const SCAL *coeff = h_grad_coeff + h_grad_off[n];
+#endif
+		int i = 0, j = 0;
 		for (int z = 0; z <= 1; ++z)
+		{
 			for (int x = n-z; x >= 0; --x)
 			{
 				int y = n-x-z;
 				SCAL t1(0), t2;
-				for (int k1 = 0; k1 <= x/2; ++k1)
+				powx = (x & 1) ? d.x : SCAL(1);
+				for (int k1 = x/2; k1 >= 0; --k1)
 				{
 					t2 = 0;
-					for (int k2 = 0; k2 <= y/2; ++k2)
+					powy = (y & 1) ? d.y : SCAL(1);
+					for (int k2 = y/2; k2 >= 0; --k2)
 					{
-						int m = k1+k2;
-						t2 += coeff13(n, m) * coeff2(y, k2) * binarypow(d.y, y - 2*k2);
+						t2 += coeff[j++] * powy;
+						powy *= y2;
 					}
-					t1 += t2 * coeff2(x, k1) * binarypow(d.x, x - 2*k1);
+					t1 += t2 * powx;
+					powx *= x2;
 				}
-				grad[i++] = C * t1 * binarypow(d.z, z);
+				grad[i++] = C * t1 * powz;
 			}
+			powz = d.z;
+		}
 	}
 }
 
 inline __device__ void gradient_coalesced3(SCAL *grad, int n, VEC d, SCAL r, int tid, int bdim, SCAL c = 1)
-// calculate the gradient of -log(r) of order n i.e. -nabla^n log(r), which is a n-order symmetric tensor.
+// calculate the gradient of 1/r of order n i.e. nabla^n 1/r, which is a n-order symmetric tensor.
 // r is the distance, d is the unit vector
 // this version assumes r2 >> EPS2 which ease the computation significantly (from O(n^5) to O(n^3))
 // if this assumption does not hold, accuracy will be reduced
@@ -782,7 +870,7 @@ inline __device__ void gradient_coalesced3(SCAL *grad, int n, VEC d, SCAL r, int
 
 template<int n>
 inline __host__ __device__ void static_gradient3(SCAL *grad, VEC d, SCAL r, SCAL c = 1)
-// calculate the gradient of -log(r) of order n i.e. -nabla^n log(r), which is a n-order symmetric tensor.
+// calculate the gradient of 1/r of order n i.e. nabla^n log(r), which is a n-order symmetric tensor.
 // r is the distance, d is the unit vector
 // this version assumes r2 >> EPS2 which ease the computation significantly (from O(n^5) to O(n^3))
 // if this assumption does not hold, accuracy will be reduced
@@ -790,31 +878,51 @@ inline __host__ __device__ void static_gradient3(SCAL *grad, VEC d, SCAL r, SCAL
 {
 	if constexpr (n == 0)
 		grad[0] = c/r;
+	else if constexpr (n == 1)
+	{
+		SCAL C = -c/(r*r);
+		grad[0] = C*d.x;
+		grad[1] = C*d.y;
+		grad[2] = C*d.z;
+	}
 	else
 	{
+		SCAL x2 = d.x*d.x, y2 = d.y*d.y;
 		SCAL C = (SCAL)paritysign(n) * binarypow(r, -n-1) * c;
-		int i = 0;
+		SCAL powx, powy, powz = 1;
+#ifdef __CUDA_ARCH__
+		static constexpr const SCAL *coeff = d_grad_coeff + d_grad_off[n];
+#else
+		static constexpr const SCAL *coeff = h_grad_coeff + h_grad_off[n];
+#endif
+		int i = 0, j = 0;
 #pragma unroll
 		for (int z = 0; z <= 1; ++z)
+		{
 #pragma unroll
 			for (int x = n-z; x >= 0; --x)
 			{
 				int y = n-x-z;
-				SCAL t1(0), t2(0);
+				SCAL t1(0), t2;
+				powx = (x & 1) ? d.x : SCAL(1);
 #pragma unroll
-				for (int k1 = 0; k1 <= x/2; ++k1)
+				for (int k1 = x/2; k1 >= 0; --k1)
 				{
 					t2 = 0;
+					powy = (y & 1) ? d.y : SCAL(1);
 #pragma unroll
-					for (int k2 = 0; k2 <= y/2; ++k2)
+					for (int k2 = y/2; k2 >= 0; --k2)
 					{
-						int m = k1+k2;
-						t2 += (SCAL)coeff13(n, m) * coeff2(y, k2) * binarypow(d.y, y - 2*k2);
+						t2 += coeff[j++] * powy;
+						powy *= y2;
 					}
-					t1 += t2 * coeff2(x, k1) * binarypow(d.x, x - 2*k1);
+					t1 += t2 * powx;
+					powx *= x2;
 				}
-				grad[i++] = C * t1 * binarypow(d.z, z);
+				grad[i++] = C * t1 * powz;
 			}
+			powz = d.z;
+		}
 	}
 }
 
@@ -1230,7 +1338,7 @@ inline __device__ void m2l_acc_coalesced3(SCAL *__restrict__ Ltuple, SCAL *__res
 // Mtuple is a tuple of multipole tensors of orders from 0 to nM (inclusive)
 // returns a tuple of local expansion tensors of orders from 0 to nL (inclusive)
 // d is the unit vector of the position of the local expansion (L) w.r.t. the multipole (M)
-// temp is a temporary memory that needs at least (maxm+1)*(maxm+2)/2 elements (independent for each thread)
+// temp is a temporary memory that needs at least (maxm+1)*(maxm+2)/2 elements (for every `bdim` threads)
 // maxm = nM+nL by default
 // O(maxm*nL^2*nM^2)
 {
@@ -1250,6 +1358,44 @@ inline __device__ void m2l_acc_coalesced3(SCAL *__restrict__ Ltuple, SCAL *__res
 			SCAL C = inv_factorial(n)/scal;
 			contract_traceless_ma_coalesced3<b_atomic>(Ltuple + tracelessoffset3(n), Mtuple + symmetricoffset3(mn), temp, C, mn, m, tid, bdim);
 		}
+		__syncwarp(mask);
+	}
+}
+
+template <bool b_atomic = false, bool no_dipole = false>
+inline __device__ void m2l_acc_coalesced_tuple3(SCAL *__restrict__ Ltuple, SCAL *__restrict__ temp, const SCAL *__restrict__ Mtuple,
+                                                int nM, int nL, VEC d, SCAL r, int tid, int bdim, int mask,
+                                                int minm = 0, int maxm = -1, int maxn = -1)
+// symmetric multipole to traceless local expansion + accumulate
+// Mtuple is a tuple of multipole tensors of orders from 0 to nM (inclusive)
+// returns a tuple of local expansion tensors of orders from 0 to nL (inclusive)
+// d is the unit vector of the position of the local expansion (L) w.r.t. the multipole (M)
+// temp is a temporary memory that needs at least (maxm+1)*(maxm+2)*(maxm+3)/6 elements (for every `bdim` threads)
+// maxm = nM+nL by default
+// O(maxm*nL^2*nM^2)
+{
+	maxm = (maxm == -1) ? nM+nL : maxm;
+	maxn = (maxn == -1) ? nL : maxn;
+	SCAL scal = binarypow(r, maxm+1) * inv_factorial(maxm); // rescaling to avoid overflowing for single-precision fp
+	for (int m = minm; m <= maxm; ++m)
+	{
+		gradient_coalesced3(temp + symmetricoffset3(m), m, d, r, tid, bdim, scal);
+		__syncwarp(mask);
+		traceless_refine_coalesced3(temp + symmetricoffset3(m), m, tid, bdim, mask);
+	}
+	for (int mn = 0; mn <= nM; ++mn)
+	{
+		if (no_dipole && mn == 1)
+			continue;
+		/*for (int m = mn+minm; m <= min(maxm, mn+maxn); ++m)
+		{
+			int n = n-mn;
+			SCAL C = inv_factorial(n)/scal;
+			contract_traceless_ma_coalesced3<b_atomic> // make tuple version
+				(Ltuple + tracelessoffset3(n), Mtuple + symmetricoffset3(mn), temp + symmetricoffset3(m), C, mn, m, tid, bdim);
+		}*/
+		contract_traceless_ma_coalesced_tuple3<b_atomic>
+			(Ltuple, temp, Mtuple + symmetricoffset3(mn), 1/scal, mn+minm, min(maxm, mn+maxn), mn, tid, bdim);
 		__syncwarp(mask);
 	}
 }
@@ -1286,7 +1432,7 @@ inline __host__ __device__ void static_m2l_inner2_3(SCAL *__restrict__ Ltuple, c
 // O(n^2 * m * nmax)
 {
 	constexpr int mn = m-n; // 0 <= mn <= nM
-	if constexpr (no_dipole && mn != 1)
+	if constexpr (!no_dipole || mn != 1)
 	{
 		SCAL C = inv_factorial(n)/scal;
 		if constexpr (traceless)

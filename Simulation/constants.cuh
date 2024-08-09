@@ -45,7 +45,7 @@ int tree_L = 0;
 int tree_steps = 8;
 
 int h_mlt_max;
-__device__ int *d_fmm_order, *d_mlt_max;
+__managed__ int m_fmm_order, m_mlt_max;
 
 bool coll = true, b_unsort = true;
 
@@ -138,6 +138,81 @@ inline __host__ __device__ double reciprocal_sqrt(double x)
 {
 	return rsqrt(x);
 }
+
+// magic unsigned division by multiplication by constant
+struct mu
+{
+	unsigned M, d; // magic number and divisor
+	int a, s; // "add" indicator and shift amount
+};
+
+inline __host__ __device__ mu magicu(unsigned d)
+// prepare magic number and other constants for unsigned division by 'd'
+// must have 1 <= d <= 2^32 - 1
+{
+	int p;
+	unsigned nc, delta, q1, r1, q2, r2;
+	mu magu;
+
+	magu.a = 0; // initialize "add" indicator
+	nc = unsigned(-1) - unsigned(-d)%d; // unsigned arithmetic here
+	p = 31; // init p
+	q1 = 0x80000000/nc; // init q1 = 2^p/nc
+	r1 = 0x80000000 - q1*nc; // remainder
+	q2 = 0x7FFFFFFF/d; // init q2 = (2^p-1)/d
+	r2 = 0x7FFFFFFF - q2*d; // init
+	do
+	{
+		++p;
+		if (r1 >= nc-r1)
+		{
+			q1 = 2*q1 + 1;
+			r1 = 2*r1 - nc;
+		}
+		else
+		{
+			q1 *= 2;
+			r1 *= 2;
+		}
+		if (r2+1 >= d-r2)
+		{
+			if (q2 >= 0x7FFFFFFF)
+				magu.a = 1;
+			q2 = 2*q2 + 1;
+			r2 = 2*r2 + 1 - d;
+		}
+		else
+		{
+			if (q2 >= 0x80000000)
+				magu.a = 1;
+			q2 *= 2;
+			r2 = 2*r2 + 1;
+		}
+		delta = d - 1 - r2;
+	} while (p < 64 && (q1 < delta || (q1 == delta && r1 == 0)));
+	magu.M = q2 + 1;
+	magu.s = p - 32;
+	magu.d = d; // divisor
+	return magu; // (magu.a was set above)
+}
+
+inline __host__ __device__ unsigned magicdivu(unsigned x, mu magic)
+// magic unsigned division
+{
+#ifdef __CUDA_ARCH__
+	return (__umulhi(x, magic.M) + x*magic.a) >> magic.s;
+#else
+	return (unsigned(((unsigned long long)x*magic.M) >> 32) + x*magic.a) >> magic.s;
+#endif
+}
+
+inline __host__ __device__ unsigned magicremu(unsigned x, mu magic)
+// magic unsigned remainder
+{
+	return x - magic.d*magicdivu(x, magic);
+}
+
+__managed__ mu m_magichi, m_magiclo{};
 
 #endif // !CONSTANTS_CUDA_H
 
