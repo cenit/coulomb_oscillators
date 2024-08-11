@@ -49,11 +49,11 @@ inline __host__ __device__ VEC_T(SCAL, 4) kernel(VEC_T(SCAL, 4) a, VEC_T(SCAL, 4
 }
 
 template<int BlockSize>
-__global__ void direct_krnl(const VEC *__restrict__ p, VEC *__restrict__ a, int n, const SCAL* param, SCAL d_EPS2)
+__global__ void direct_krnl(const ALIGNED_VEC *__restrict__ p, ALIGNED_VEC *__restrict__ a, int n, const SCAL* param, SCAL d_EPS2)
 // direct force computation kernel
 // does not work properly for some values of n (boh?)
 {
-	__shared__ VEC spos[BlockSize]; // shared memory
+	__shared__ ALIGNED_VEC spos[BlockSize]; // shared memory
 	int tid = threadIdx.x;
 	int Tiles = n / BlockSize;
 	SCAL k = (SCAL)1;
@@ -64,7 +64,7 @@ __global__ void direct_krnl(const VEC *__restrict__ p, VEC *__restrict__ a, int 
 		i < n; 
 		i += gridDim.x * blockDim.x)
 	{
-		VEC atmp{};
+		VEC atmp{}, pi = aligned_load(p[i]);
 
 		for (int tile = 0; tile < Tiles; ++tile)
 		{
@@ -74,7 +74,7 @@ __global__ void direct_krnl(const VEC *__restrict__ p, VEC *__restrict__ a, int 
 #pragma unroll
 			for (int j = 0; j < BlockSize; ++j)
 			{
-				VEC d = p[i] - spos[j];
+				VEC d = pi - aligned_load(spos[j]);
 				SCAL dist2 = dot(d, d) + d_EPS2;
 				SCAL invDist2 = (SCAL)1 / dist2; // __drcp_rn = (double) reciprocal + round to nearest
 
@@ -89,7 +89,7 @@ __global__ void direct_krnl(const VEC *__restrict__ p, VEC *__restrict__ a, int 
 		
 		for (int j = 0; j < n - Tiles * BlockSize; ++j)
 		{
-			VEC d = p[i] - spos[j];
+			VEC d = pi - aligned_load(spos[j]);
 			SCAL dist2 = dot(d, d) + d_EPS2;
 			SCAL invDist2 = (SCAL)1 / dist2; // __drcp_rn = (double) reciprocal + round to nearest
 
@@ -97,11 +97,11 @@ __global__ void direct_krnl(const VEC *__restrict__ p, VEC *__restrict__ a, int 
 		}
 		__syncthreads();
 		
-		a[i] = k*atmp;
+		a[i] = aligned_store(k*atmp);
 	}
 }
 
-void direct(VEC *p, VEC *a, int n, const SCAL* param)
+void direct(ALIGNED_VEC *p, ALIGNED_VEC *a, int n, const SCAL* param)
 {
 	assert(n > 0);
 	int nBlocks = (n-1) / BLOCK_SIZE + 1;
@@ -137,7 +137,7 @@ void direct(VEC *p, VEC *a, int n, const SCAL* param)
 	gpuErrchk(cudaDeviceSynchronize());
 }
 
-inline __host__ __device__ void direct2_core(const VEC *__restrict__ p, VEC *__restrict__ a, int n,
+inline __host__ __device__ void direct2_core(const ALIGNED_VEC *__restrict__ p, ALIGNED_VEC *__restrict__ a, int n,
 											 const SCAL* param, SCAL d_EPS2, int begi, int endi, int stride)
 // direct force computation kernel without optimizations
 // it works properly
@@ -148,27 +148,27 @@ inline __host__ __device__ void direct2_core(const VEC *__restrict__ p, VEC *__r
 		k = param[0];
 	while (i < endi)
 	{
-		VEC atmp{};
+		VEC atmp{}, pi = aligned_load(p[i]);
 
 		for (int j = 0; j < n; ++j)
 		{
-			VEC d = p[i] - p[j];
+			VEC d = pi - aligned_load(p[j]);
 			SCAL dist2 = dot(d, d) + d_EPS2;
 			SCAL invDist2 = (SCAL)1 / dist2; // __drcp_rn = (double) reciprocal + round to nearest
 
 			atmp = kernel(atmp, d, invDist2);
 		}
-		a[i] = k*atmp;
+		a[i] = aligned_store(k*atmp);
 		i += stride;
 	}
 }
 
-__global__ void direct2_krnl(const VEC *p, VEC *a, int n, const SCAL* param, SCAL d_EPS2)
+__global__ void direct2_krnl(const ALIGNED_VEC *p, ALIGNED_VEC *a, int n, const SCAL* param, SCAL d_EPS2)
 {
 	direct2_core(p, a, n, param, d_EPS2, blockDim.x * blockIdx.x + threadIdx.x, n, gridDim.x * blockDim.x);
 }
 
-void direct2(VEC *p, VEC *a, int n, const SCAL* param)
+void direct2(ALIGNED_VEC *p, ALIGNED_VEC *a, int n, const SCAL* param)
 {
 	assert(n > 0);
 	int nBlocks = std::min(MAX_GRID_SIZE, (n + BLOCK_SIZE - 1) / BLOCK_SIZE);
@@ -178,7 +178,7 @@ void direct2(VEC *p, VEC *a, int n, const SCAL* param)
 	gpuErrchk(cudaDeviceSynchronize());
 }
 
-void direct2_cpu(VEC *p, VEC *a, int n, const SCAL* param)
+void direct2_cpu(ALIGNED_VEC *p, ALIGNED_VEC *a, int n, const SCAL* param)
 {
 	assert(n > 0);
 	std::vector<std::thread> threads(CPU_THREADS);
@@ -189,7 +189,7 @@ void direct2_cpu(VEC *p, VEC *a, int n, const SCAL* param)
 		threads[i].join();
 }
 
-inline __host__ __device__ void direct3_core(const VEC *__restrict__ p, VEC *__restrict__ a, int n,
+inline __host__ __device__ void direct3_core(const ALIGNED_VEC *__restrict__ p, ALIGNED_VEC *__restrict__ a, int n,
 											 const SCAL* param, SCAL d_EPS2, int begi, int endi, int stride)
 // direct force computation kernel without optimizations
 // uses Kahan summation
@@ -201,12 +201,11 @@ inline __host__ __device__ void direct3_core(const VEC *__restrict__ p, VEC *__r
 		k = param[0];
 	while (i < endi)
 	{
-		VEC atmp{};
-		VEC c{};
+		VEC atmp{}, c{}, pi = aligned_load(p[i]);
 
 		for (int j = 0; j < n; ++j)
 		{
-			VEC d = p[i] - p[j];
+			VEC d = pi - aligned_load(p[j]);
 			SCAL dist2 = dot(d, d) + d_EPS2;
 			SCAL invDist2 = (SCAL)1 / dist2; // __drcp_rn = (double) reciprocal + round to nearest
 #if DIM == 2
@@ -220,17 +219,17 @@ inline __host__ __device__ void direct3_core(const VEC *__restrict__ p, VEC *__r
 			c = (t - atmp) - y;
 			atmp = t;
 		}
-		a[i] = k*atmp;
+		a[i] = aligned_store(k*atmp);
 		i += stride;
 	}
 }
 
-__global__ void direct3_krnl(const VEC *p, VEC *a, int n, const SCAL* param, SCAL d_EPS2)
+__global__ void direct3_krnl(const ALIGNED_VEC *p, ALIGNED_VEC *a, int n, const SCAL* param, SCAL d_EPS2)
 {
 	direct3_core(p, a, n, param, d_EPS2, blockDim.x * blockIdx.x + threadIdx.x, n, gridDim.x * blockDim.x);
 }
 
-void direct3(VEC *p, VEC *a, int n, const SCAL* param)
+void direct3(ALIGNED_VEC *p, ALIGNED_VEC *a, int n, const SCAL* param)
 {
 	assert(n > 0);
 	static int gridsize = 0, blocksize = 0;
@@ -244,7 +243,7 @@ void direct3(VEC *p, VEC *a, int n, const SCAL* param)
 	gpuErrchk(cudaDeviceSynchronize());
 }
 
-void direct3_cpu(VEC *p, VEC *a, int n, const SCAL* param)
+void direct3_cpu(ALIGNED_VEC *p, ALIGNED_VEC *a, int n, const SCAL* param)
 {
 	assert(n > 0);
 	std::vector<std::thread> threads(CPU_THREADS);

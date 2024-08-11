@@ -140,9 +140,10 @@ inline __host__ __device__ double reciprocal_sqrt(double x)
 }
 
 // magic unsigned division by multiplication by constant
+// algorithm by A. Wesley, Hacker's Delight
 struct mu
 {
-	unsigned M, d; // magic number and divisor
+	unsigned M; // magic number and divisor
 	int a, s; // "add" indicator and shift amount
 };
 
@@ -192,7 +193,6 @@ inline __host__ __device__ mu magicu(unsigned d)
 	} while (p < 64 && (q1 < delta || (q1 == delta && r1 == 0)));
 	magu.M = q2 + 1;
 	magu.s = p - 32;
-	magu.d = d; // divisor
 	return magu; // (magu.a was set above)
 }
 
@@ -206,10 +206,11 @@ inline __host__ __device__ unsigned magicdivu(unsigned x, mu magic)
 #endif
 }
 
-inline __host__ __device__ unsigned magicremu(unsigned x, mu magic)
+inline __host__ __device__ unsigned magicremu(unsigned x, unsigned d, mu magic)
 // magic unsigned remainder
+// d is the divisor, the same as the one used to construct the magic number
 {
-	return x - magic.d*magicdivu(x, magic);
+	return x - d*magicdivu(x, magic);
 }
 
 __managed__ mu m_magichi, m_magiclo{};

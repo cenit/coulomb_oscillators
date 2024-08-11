@@ -23,14 +23,14 @@
 
 struct Tree
 {
-	VEC *__restrict__ center, *__restrict__ field;
+	ALIGNED_VEC *__restrict__ center, *__restrict__ field;
 	SCAL *mpole;
 	int *__restrict__ mult, *__restrict__ index;
 };
 // "index" will be the index of the first element that belongs to the node
 // Sorting the particle array will be needed in order to avoid slow random access.
 
-__global__ void printp(const VEC *p, int n)
+__global__ void printp(const ALIGNED_VEC *p, int n)
 // print positions of all particles, for debug purposes
 {
 	for (int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -41,25 +41,25 @@ __global__ void printp(const VEC *p, int n)
 	}
 }
 
-inline __host__ __device__ void evalKeys_krnl(int *keys, const VEC *p, const VEC *min, SCAL rdelta, int side,
+inline __host__ __device__ void evalKeys_krnl(int *keys, const ALIGNED_VEC *p, const ALIGNED_VEC *min, SCAL rdelta, int side,
                                               int begi, int endi, int stride)
 // put particle i in box keys[i]
 {
 	for (int i = begi; i < endi; i += stride)
 	{
-		IVEC iD = to_ivec((p[i] - min[0]) * rdelta);
+		IVEC iD = to_ivec((aligned_load(p[i]) - aligned_load(min[0])) * rdelta);
 		iD = clip(iD, 0, side-1); // mymath.cuh
 		
 		keys[i] = flatten(iD, side); // mymath.cuh
 	}
 }
 
-__global__ void evalKeys(int *keys, const VEC *p, const VEC *min, int n, SCAL rdelta, int side)
+__global__ void evalKeys(int *keys, const ALIGNED_VEC *p, const ALIGNED_VEC *min, int n, SCAL rdelta, int side)
 {
 	evalKeys_krnl(keys, p, min, rdelta, side, blockDim.x * blockIdx.x + threadIdx.x, n, gridDim.x * blockDim.x);
 }
 
-void evalKeys_cpu(int *keys, const VEC *p, const VEC *min, int n, SCAL rdelta, int side)
+void evalKeys_cpu(int *keys, const ALIGNED_VEC *p, const ALIGNED_VEC *min, int n, SCAL rdelta, int side)
 {
 	std::vector<std::thread> threads(CPU_THREADS);
 	int niter = (n-1)/CPU_THREADS+1;
@@ -128,13 +128,13 @@ inline __device__ __host__ int tree_side(int l)
 	return 1 << l;
 }
 
-__global__ void initLeaves(VEC *center, int m)
+__global__ void initLeaves(ALIGNED_VEC *center, int m)
 {
 	for (int i = blockDim.x * blockIdx.x + threadIdx.x;
 	     i < m;
 	     i += gridDim.x * blockDim.x)
 	{
-		center[i] = VEC{};
+		center[i] = ALIGNED_VEC{};
 	}
 }
 
@@ -223,8 +223,8 @@ __global__ void monopoleLeaves(SCAL *monopole, const int *mult, int m)
 	}
 }
 
-inline __host__ __device__ void centerLeaves_krnl(VEC *__restrict__ center, const int *mult, const int *index,
-                                                  const VEC *__restrict__ p, int begi, int endi, int stride)
+inline __host__ __device__ void centerLeaves_krnl(ALIGNED_VEC *__restrict__ center, const int *mult, const int *index,
+                                                  const ALIGNED_VEC *__restrict__ p, int begi, int endi, int stride)
 // calculate the center of charge/mass for each cell
 {
 	for (int i = begi; i < endi; i += stride)
@@ -233,21 +233,21 @@ inline __host__ __device__ void centerLeaves_krnl(VEC *__restrict__ center, cons
 		VEC t{};
 		if (mlt > 0)
 		{
-			const VEC *pi = p + index[i];
+			const ALIGNED_VEC *pi = p + index[i];
 			for (int j = 0; j < mlt; ++j)
-				t += pi[j];
+				t += aligned_load(pi[j]);
 			t /= (SCAL)mlt;
 		}
-		center[i] = t;
+		center[i] = aligned_store(t);
 	}
 }
 
-__global__ void centerLeaves(VEC *center, const int *mult, const int *index, const VEC *p, int m)
+__global__ void centerLeaves(ALIGNED_VEC *center, const int *mult, const int *index, const ALIGNED_VEC *p, int m)
 {
 	centerLeaves_krnl(center, mult, index, p, blockDim.x * blockIdx.x + threadIdx.x, m, gridDim.x * blockDim.x);
 }
 
-void centerLeaves_cpu(VEC *center, const int *mult, const int *index, const VEC *p, int m)
+void centerLeaves_cpu(ALIGNED_VEC *center, const int *mult, const int *index, const ALIGNED_VEC *p, int m)
 {
 	std::vector<std::thread> threads(CPU_THREADS);
 	int niter = (m-1)/CPU_THREADS+1;
@@ -257,8 +257,8 @@ void centerLeaves_cpu(VEC *center, const int *mult, const int *index, const VEC 
 		threads[i].join();
 }
 
-inline __host__ __device__ void p2p2_krnl(VEC *__restrict__ a, const int *mult, const int *index,
-                                          const VEC *__restrict__ p, int side, int radius, SCAL d_EPS2,
+inline __host__ __device__ void p2p2_krnl(ALIGNED_VEC *__restrict__ a, const int *mult, const int *index,
+                                          const ALIGNED_VEC *__restrict__ p, int side, int radius, SCAL d_EPS2,
                                           int begi, int endi, int stride)
 // particle to particle interaction
 // radius: it is the infinity-norm radius (given as number of leaf cells) of the neighborhood area
@@ -274,40 +274,40 @@ inline __host__ __device__ void p2p2_krnl(VEC *__restrict__ a, const int *mult, 
 		int lmin = ((j-radius > 0) ? (j-radius) : 0),
 		    lmax = ((j+radius < side-1) ? (j+radius) : (side-1));
 		int mlt1 = mult[ij];
-		const VEC *p1 = p + ind1;
-		VEC *a1 = a + ind1;
+		const ALIGNED_VEC *p1 = p + ind1;
+		ALIGNED_VEC *a1 = a + ind1;
 		for (int h = 0; h < mlt1; ++h)
 		{
-			VEC atmp{};
+			VEC atmp{}, p1h = aligned_load(p1[h]);
 			for (int k = kmin; k <= kmax; ++k)
 			{
 				int klT = k*side+lmin;
 				int indT = index[klT];
 				int mltT = mult[klT];
 				const int *multT = mult + klT;
-				const VEC *pT = p + indT;
+				const ALIGNED_VEC *pT = p + indT;
 				for (int l = 1; l <= lmax - lmin; ++l)
 					mltT += multT[l];
 				for (int g = 0; g < mltT; ++g)
 				{
-					VEC d = p1[h] - pT[g];
+					VEC d = p1h - aligned_load(pT[g]);
 					SCAL dist2 = dot(d, d) + d_EPS2;
 					SCAL invDist2 = (SCAL)1 / dist2;
 
 					atmp = kernel(atmp, d, invDist2);
 				}
 			}
-			a1[h] = atmp;
+			a1[h] = aligned_store(atmp);
 		}
 	}
 }
 
-__global__ void p2p2(VEC *a, const int *mult, const int *index, const VEC *p, int m, int side, int radius, SCAL d_EPS2)
+__global__ void p2p2(ALIGNED_VEC *a, const int *mult, const int *index, const ALIGNED_VEC *p, int m, int side, int radius, SCAL d_EPS2)
 {
 	p2p2_krnl(a, mult, index, p, side, radius, d_EPS2, blockDim.x * blockIdx.x + threadIdx.x, m, gridDim.x * blockDim.x);
 }
 
-void p2p2_cpu(VEC *a, const int *mult, const int *index, const VEC *p, int m, int side, int radius, SCAL d_EPS2)
+void p2p2_cpu(ALIGNED_VEC *a, const int *mult, const int *index, const ALIGNED_VEC *p, int m, int side, int radius, SCAL d_EPS2)
 {
 	std::vector<std::thread> threads(CPU_THREADS);
 	int niter = (m-1)/CPU_THREADS+1;
@@ -317,8 +317,8 @@ void p2p2_cpu(VEC *a, const int *mult, const int *index, const VEC *p, int m, in
 		threads[i].join();
 }
 
-inline __host__ __device__ void p2p3_krnl(VEC *__restrict__ a, const int *mult, const int *index,
-                                          const VEC *__restrict__ p, int side, int radius, SCAL d_EPS2,
+inline __host__ __device__ void p2p3_krnl(ALIGNED_VEC *__restrict__ a, const int *mult, const int *index,
+                                          const ALIGNED_VEC *__restrict__ p, int side, int radius, SCAL d_EPS2,
                                           int begi, int endi, int stride)
 // particle to particle interaction
 // radius: it is the infinity-norm radius (given as number of leaf cells) of the neighborhood area
@@ -336,11 +336,11 @@ inline __host__ __device__ void p2p3_krnl(VEC *__restrict__ a, const int *mult, 
 		int zmin = ((k-radius > 0) ? (k-radius) : 0),
 		    zmax = ((k+radius < side-1) ? (k+radius) : (side-1));
 		int mlt1 = mult[ijk];
-		const VEC *p1 = p + ind1;
-		VEC *a1 = a + ind1;
+		const ALIGNED_VEC *p1 = p + ind1;
+		ALIGNED_VEC *a1 = a + ind1;
 		for (int h = 0; h < mlt1; ++h)
 		{
-			VEC atmp{};
+			VEC atmp{}, p1h = aligned_load(p1[h]);
 			for (int x = xmin; x <= xmax; ++x)
 				for (int y = ymin; y <= ymax; ++y)
 				{
@@ -348,29 +348,29 @@ inline __host__ __device__ void p2p3_krnl(VEC *__restrict__ a, const int *mult, 
 					int indT = index[klT];
 					int mltT = mult[klT];
 					const int *multT = mult + klT;
-					const VEC *pT = p + indT;
+					const ALIGNED_VEC *pT = p + indT;
 					for (int z = 1; z <= zmax - zmin; ++z)
 						mltT += multT[z];
 					for (int g = 0; g < mltT; ++g)
 					{
-						VEC d = p1[h] - pT[g];
+						VEC d = p1h - aligned_load(pT[g]);
 						SCAL dist2 = dot(d, d) + d_EPS2;
 						SCAL invDist2 = (SCAL)1 / dist2;
 
 						atmp = kernel(atmp, d, invDist2);
 					}
 				}
-			a1[h] = atmp;
+			a1[h] = aligned_store(atmp);
 		}
 	}
 }
 
-__global__ void p2p3(VEC *a, const int *mult, const int *index, const VEC *p, int m, int side, int radius, SCAL d_EPS2)
+__global__ void p2p3(ALIGNED_VEC *a, const int *mult, const int *index, const ALIGNED_VEC *p, int m, int side, int radius, SCAL d_EPS2)
 {
 	p2p3_krnl(a, mult, index, p, side, radius, d_EPS2, blockDim.x * blockIdx.x + threadIdx.x, m, gridDim.x * blockDim.x);
 }
 
-void p2p3_cpu(VEC *a, const int *mult, const int *index, const VEC *p, int m, int side, int radius, SCAL d_EPS2)
+void p2p3_cpu(ALIGNED_VEC *a, const int *mult, const int *index, const ALIGNED_VEC *p, int m, int side, int radius, SCAL d_EPS2)
 {
 	std::vector<std::thread> threads(CPU_THREADS);
 	int niter = (m-1)/CPU_THREADS+1;
@@ -405,13 +405,13 @@ __global__ void buildTree2(Tree tree, int l) // L-1 -> 0
 
 		if (mlt > 0)
 		{
-			coord += tree.mpole[ijp] * tree.center[ijp];
-			coord += tree.mpole[ijp + 1] * tree.center[ijp + 1];
-			coord += tree.mpole[ijp + sidelp] * tree.center[ijp + sidelp];
-			coord += tree.mpole[ijp + sidelp + 1] * tree.center[ijp + sidelp + 1];
+			coord += tree.mpole[ijp] * aligned_load(tree.center[ijp]);
+			coord += tree.mpole[ijp + 1] * aligned_load(tree.center[ijp + 1]);
+			coord += tree.mpole[ijp + sidelp] * aligned_load(tree.center[ijp + sidelp]);
+			coord += tree.mpole[ijp + sidelp + 1] * aligned_load(tree.center[ijp + sidelp + 1]);
 			coord /= mpole;
 		}
-		tree.center[ij] = coord;
+		tree.center[ij] = aligned_store(coord);
 		tree.mpole[ij] = mpole;
 		tree.mult[ij] = mlt;
 	}
@@ -431,7 +431,7 @@ __global__ void c2c2(Tree tree, int l, int radius, SCAL d_EPS2) // L -> 1
 		    kmax = ((im+(2*radius+1) < sidel-1) ? (im+(2*radius+1)) : (sidel-1));
 		int ij1 = beg + ij;
 			
-		VEC atmp{};
+		VEC atmp{}, center1 = aligned_load(tree.center[ij1]);
 		if (tree.mult[ij1] > 0)
 		{
 			int jm = (j/2)*2;
@@ -455,14 +455,14 @@ __global__ void c2c2(Tree tree, int l, int radius, SCAL d_EPS2) // L -> 1
 					if (!(k > i + radius || k < i - radius || g > j + radius || g < j - radius))
 						continue;
 					int ij2 = beg + k*sidel + g;
-					VEC d = tree.center[ij1] - tree.center[ij2];
+					VEC d = center1 - aligned_load(tree.center[ij2]);
 					SCAL dist2 = dot(d, d) + d_EPS2;
 					SCAL invDist2 = (SCAL)1 / dist2; // __drcp_rn = (double) reciprocal + round to nearest
 
 					atmp = kernel(atmp, d, invDist2, tree.mpole[ij2]);
 				}
 		}
-		tree.field[ij1] = atmp;
+		tree.field[ij1] = aligned_store(atmp);
 	}
 }
 
@@ -479,16 +479,16 @@ __global__ void pushl(Tree tree, int l) // 0 -> L-1
 		int ij = beg+ij0;
 		int ijp = begp+2*(i*sidelp+j);
 
-		VEC fld = tree.field[ij];
+		VEC fld = aligned_load(tree.field[ij]);
 
-		tree.field[ijp] += fld;
-		tree.field[ijp + 1] += fld;
-		tree.field[ijp + sidelp] += fld;
-		tree.field[ijp + sidelp + 1] += fld;
+		tree.field[ijp] = aligned_store(aligned_load(tree.field[ijp]) + fld);
+		tree.field[ijp + 1] = aligned_store(aligned_load(tree.field[ijp + 1]) + fld);
+		tree.field[ijp + sidelp] = aligned_store(aligned_load(tree.field[ijp + sidelp]) + fld);
+		tree.field[ijp + sidelp + 1] = aligned_store(aligned_load(tree.field[ijp + sidelp + 1]) + fld);
 	}
 }
 
-__global__ void pushLeaves(VEC *__restrict__ a, const VEC *__restrict__ field,
+__global__ void pushLeaves(ALIGNED_VEC *__restrict__ a, const ALIGNED_VEC *__restrict__ field,
 						   const int *mult, const int *index, int m)
 // push informations about the field from leaves to individual particles
 {
@@ -497,26 +497,26 @@ __global__ void pushLeaves(VEC *__restrict__ a, const VEC *__restrict__ field,
 	     i += gridDim.x * blockDim.x)
 	{
 		int mlt = mult[i];
-		VEC *ai = a + index[i];
+		ALIGNED_VEC *ai = a + index[i];
 		for (int j = 0; j < mlt; ++j)
-			ai[j] += field[i];
+			ai[j] = aligned_store(aligned_load(ai[j]) + aligned_load(field[i]));
 	}
 }
 
-inline __host__ __device__ void rescale_krnl(VEC *a, const SCAL *param, int begi, int endi, int stride)
+inline __host__ __device__ void rescale_krnl(ALIGNED_VEC *a, const SCAL *param, int begi, int endi, int stride)
 // rescale accelerations by a factor
 {
 	SCAL c = param[0];
 	for (int i = begi; i < endi; i += stride)
-		a[i] *= c;
+		a[i] = aligned_store(aligned_load(a[i])*c);
 }
 
-__global__ void rescale(VEC *a, int n, const SCAL *param)
+__global__ void rescale(ALIGNED_VEC *a, int n, const SCAL *param)
 {
 	rescale_krnl(a, param, blockDim.x * blockIdx.x + threadIdx.x, n, gridDim.x * blockDim.x);
 }
 
-void rescale_cpu(VEC *a, int n, const SCAL *param)
+void rescale_cpu(ALIGNED_VEC *a, int n, const SCAL *param)
 {
 	std::vector<std::thread> threads(CPU_THREADS);
 	int niter = (n-1)/CPU_THREADS+1;
@@ -526,7 +526,7 @@ void rescale_cpu(VEC *a, int n, const SCAL *param)
 		threads[i].join();
 }
 
-void appel(VEC *p, VEC *a, int n, const SCAL* param)
+void appel(ALIGNED_VEC *p, ALIGNED_VEC *a, int n, const SCAL* param)
 {
 	int nBlocks = std::min(MAX_GRID_SIZE, (n + BLOCK_SIZE - 1) / BLOCK_SIZE);
 	int radius = tree_radius;
@@ -536,9 +536,9 @@ void appel(VEC *p, VEC *a, int n, const SCAL* param)
 	static int *d_keys = nullptr, *d_ind = nullptr;
 	static char *d_tbuf = nullptr;
 	static Tree tree;
-	static VEC *d_minmax = nullptr;
-	static VEC *minmax_ = new VEC[2*nBlocksRed];
-	static VEC *d_tmp = nullptr;
+	static ALIGNED_VEC *d_minmax = nullptr;
+	static ALIGNED_VEC *minmax_ = new ALIGNED_VEC[2*nBlocksRed];
+	static ALIGNED_VEC *d_tmp = nullptr;
 	assert(n > BLOCK_SIZE);
 
 	int nZ = 1<<DIM;
@@ -561,10 +561,10 @@ void appel(VEC *p, VEC *a, int n, const SCAL* param)
 				gpuErrchk(cudaFree(d_tbuf));
 				gpuErrchk(cudaFree(d_minmax));
 			}
-			gpuErrchk(cudaMalloc((void**)&d_tbuf, (sizeof(VEC)*2 + sizeof(SCAL) + sizeof(int)*2)*ntot));
-			gpuErrchk(cudaMalloc((void**)&d_minmax, sizeof(VEC)*2*nBlocksRed));
+			gpuErrchk(cudaMalloc((void**)&d_tbuf, (sizeof(ALIGNED_VEC)*2 + sizeof(SCAL) + sizeof(int)*2)*ntot));
+			gpuErrchk(cudaMalloc((void**)&d_minmax, sizeof(ALIGNED_VEC)*2*nBlocksRed));
 		}
-		tree.center = (VEC*)d_tbuf;
+		tree.center = (ALIGNED_VEC*)d_tbuf;
 		tree.field = tree.center + ntot;
 		tree.mpole = (SCAL*)(tree.field + ntot);
 		tree.mult = (int*)(tree.mpole + ntot);
@@ -579,13 +579,13 @@ void appel(VEC *p, VEC *a, int n, const SCAL* param)
 			}
 			gpuErrchk(cudaMalloc((void**)&d_keys, sizeof(int)*n*2));
 			gpuErrchk(cudaMalloc((void**)&d_ind, sizeof(int)*n*2));
-			gpuErrchk(cudaMalloc((void**)&d_tmp, sizeof(VEC)*n));
+			gpuErrchk(cudaMalloc((void**)&d_tmp, sizeof(ALIGNED_VEC)*n));
 		}
 	}
 
 	minmaxReduce(d_minmax, p, n, nBlocksRed);
 
-	gpuErrchk(cudaMemcpy(minmax_, d_minmax, sizeof(VEC)*2*nBlocksRed, cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy(minmax_, d_minmax, sizeof(ALIGNED_VEC)*2*nBlocksRed, cudaMemcpyDeviceToHost));
 
 	//printp <<< 1, 1 >>> (p, n);
 
@@ -596,11 +596,10 @@ void appel(VEC *p, VEC *a, int n, const SCAL* param)
 			minmax_[0] = fmin(minmax_[0], minmax_[i]);
 			minmax_[1] = fmax(minmax_[1], minmax_[i+1]);
 		}
-		gpuErrchk(cudaMemcpy(d_minmax, minmax_, sizeof(VEC)*2, cudaMemcpyHostToDevice));
+		gpuErrchk(cudaMemcpy(d_minmax, minmax_, sizeof(ALIGNED_VEC)*2, cudaMemcpyHostToDevice));
 	}
-	//std::cout << ' ' << minmax_[0] << ", " << minmax_[1] << std::endl;
 
-	VEC Delta = minmax_[1] - minmax_[0];
+	VEC Delta = aligned_load(minmax_[1]) - aligned_load(minmax_[0]);
 	SCAL delta = fmax(Delta) / (SCAL)sideL, EPS = sqrt(EPS2);
 	if (delta < EPS)
 		delta = EPS;
@@ -628,8 +627,6 @@ void appel(VEC *p, VEC *a, int n, const SCAL* param)
 		}
 	}
 	gpuErrchk(cub::DeviceRadixSort::SortPairs(d_tmp_stor, stor_bytes, d_dbuf, d_values, n, 0, L*DIM));
-
-	//check_krnl <<< nBlocks, BLOCK_SIZE >>> (d_dbuf.Current(), n);
 
 	gather_krnl <<< nBlocks, BLOCK_SIZE >>> (d_tmp, p, d_values.Current(), n);
 	copy_krnl <<< nBlocks, BLOCK_SIZE >>> (p, d_tmp, n);

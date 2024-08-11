@@ -51,23 +51,23 @@ inline __device__ __host__ SCAL rel_diff2(VEC x, VEC ref)
 
 struct VecMin
 {
-	__device__ __host__ __forceinline__ VEC operator()(const VEC& a, const VEC& b) const
+	__device__ __host__ __forceinline__ ALIGNED_VEC operator()(const ALIGNED_VEC& a, const ALIGNED_VEC& b) const
 	{
-		return fmin(a, b);
+		return aligned_store(fmin(aligned_load(a), aligned_load(b)));
 	}
 };
 struct VecMax
 {
-	__device__ __host__ __forceinline__ VEC operator()(const VEC& a, const VEC& b) const
+	__device__ __host__ __forceinline__ ALIGNED_VEC operator()(const ALIGNED_VEC& a, const ALIGNED_VEC& b) const
 	{
-		return fmax(a, b);
+		return aligned_store(fmax(aligned_load(a), aligned_load(b)));
 	}
 };
 
-void minmaxReduce2(VEC *minmax, const VEC *src, unsigned int n, void *& d_tmp_stor, size_t& stor_bytes)
+void minmaxReduce2(ALIGNED_VEC *minmax, const ALIGNED_VEC *src, unsigned int n, void *& d_tmp_stor, size_t& stor_bytes)
 {
 	size_t new_stor_bytes = 0;
-	gpuErrchk(cub::DeviceReduce::Reduce(nullptr, new_stor_bytes, src, minmax, n, VecMin(), ONES_VEC*FLT_MAX));
+	gpuErrchk(cub::DeviceReduce::Reduce(nullptr, new_stor_bytes, src, minmax, n, VecMin(), aligned_store(ONES_VEC)*FLT_MAX));
 	if (new_stor_bytes > stor_bytes)
 	{
 		if (stor_bytes > 0)
@@ -75,12 +75,12 @@ void minmaxReduce2(VEC *minmax, const VEC *src, unsigned int n, void *& d_tmp_st
 		stor_bytes = new_stor_bytes;
 		gpuErrchk(cudaMalloc(&d_tmp_stor, stor_bytes));
 	}
-	gpuErrchk(cub::DeviceReduce::Reduce(d_tmp_stor, stor_bytes, src, minmax, n, VecMin(), ONES_VEC*FLT_MAX));
-	gpuErrchk(cub::DeviceReduce::Reduce(d_tmp_stor, stor_bytes, src, minmax+1, n, VecMax(), -ONES_VEC*FLT_MAX));
+	gpuErrchk(cub::DeviceReduce::Reduce(d_tmp_stor, stor_bytes, src, minmax, n, VecMin(), aligned_store(ONES_VEC)*FLT_MAX));
+	gpuErrchk(cub::DeviceReduce::Reduce(d_tmp_stor, stor_bytes, src, minmax+1, n, VecMax(), aligned_store(-ONES_VEC)*FLT_MAX));
 }
 
 template <int blockSize>
-__global__ void relerrReduce2_krnl(SCAL *relerr, const VEC *__restrict__ x, const VEC *__restrict__ xref, int n)
+__global__ void relerrReduce2_krnl(SCAL *relerr, const ALIGNED_VEC *__restrict__ x, const ALIGNED_VEC *__restrict__ xref, int n)
 {
 	using BlockReduceT = cub::BlockReduce<SCAL, blockSize>;
 	__shared__ typename BlockReduceT::TempStorage temp_storage;
@@ -90,13 +90,13 @@ __global__ void relerrReduce2_krnl(SCAL *relerr, const VEC *__restrict__ x, cons
 
 	SCAL result;
 	if (gid < n)
-		result = BlockReduceT(temp_storage).Sum(rel_diff1(x[gid], xref[gid])/n);
+		result = BlockReduceT(temp_storage).Sum(rel_diff1(aligned_load(x[gid]), aligned_load(xref[gid]))/n);
 
 	if (tid == 0)
 		myAtomicAdd(relerr, result);
 }
 
-void relerrReduce2(SCAL *relerr, const VEC *x, const VEC *xref, unsigned int n)
+void relerrReduce2(SCAL *relerr, const ALIGNED_VEC *x, const ALIGNED_VEC *xref, unsigned int n)
 {
 	int nBlocks = (n-1)/1024 + 1;
 	cudaMemset(relerr, 0, sizeof(SCAL));
@@ -104,7 +104,7 @@ void relerrReduce2(SCAL *relerr, const VEC *x, const VEC *xref, unsigned int n)
 }
 
 template <int blockSize>
-__global__ void relerrReduce3Num_krnl(SCAL *relerr, const VEC *__restrict__ x, const VEC *__restrict__ xref, int n)
+__global__ void relerrReduce3Num_krnl(SCAL *relerr, const ALIGNED_VEC *__restrict__ x, const ALIGNED_VEC *__restrict__ xref, int n)
 {
 	using BlockReduceT = cub::BlockReduce<SCAL, blockSize>;
 	__shared__ typename BlockReduceT::TempStorage temp_storage;
@@ -115,7 +115,7 @@ __global__ void relerrReduce3Num_krnl(SCAL *relerr, const VEC *__restrict__ x, c
 	SCAL result;
 	if (gid < n)
 	{
-		VEC d = x[gid] - xref[gid];
+		VEC d = aligned_load(x[gid]) - aligned_load(xref[gid]);
 		result = BlockReduceT(temp_storage).Sum(dot(d, d));
 	}
 
@@ -123,7 +123,7 @@ __global__ void relerrReduce3Num_krnl(SCAL *relerr, const VEC *__restrict__ x, c
 		myAtomicAdd(relerr, result);
 }
 template <int blockSize>
-__global__ void relerrReduce3Den_krnl(SCAL *relerr, const VEC *xref, int n)
+__global__ void relerrReduce3Den_krnl(SCAL *relerr, const ALIGNED_VEC *xref, int n)
 {
 	using BlockReduceT = cub::BlockReduce<SCAL, blockSize>;
 	__shared__ typename BlockReduceT::TempStorage temp_storage;
@@ -133,7 +133,10 @@ __global__ void relerrReduce3Den_krnl(SCAL *relerr, const VEC *xref, int n)
 
 	SCAL result;
 	if (gid < n)
-		result = BlockReduceT(temp_storage).Sum(dot(xref[gid], xref[gid]));
+	{
+		VEC xgid = aligned_load(xref[gid]);
+		result = BlockReduceT(temp_storage).Sum(dot(xgid, xgid));
+	}
 
 	if (tid == 0)
 		myAtomicAdd(relerr+1, result);
@@ -143,7 +146,7 @@ __global__ void relerrReduce3Res_krnl(SCAL *relerr)
 	relerr[0] = sqrt(relerr[0] / relerr[1]);
 }
 
-void relerrReduce3(SCAL *relerr, const VEC *x, const VEC *xref, unsigned int n)
+void relerrReduce3(SCAL *relerr, const ALIGNED_VEC *x, const ALIGNED_VEC *xref, unsigned int n)
 {
 	int nBlocks = (n-1)/1024 + 1;
 	cudaMemset(relerr, 0, 2*sizeof(SCAL));
@@ -153,9 +156,9 @@ void relerrReduce3(SCAL *relerr, const VEC *x, const VEC *xref, unsigned int n)
 }
 
 template <int blockSize, bool nIsPow2>
-__global__ void minmaxReduce_krnl(VEC *minmax_, const VEC *x, unsigned int n)
+__global__ void minmaxReduce_krnl(ALIGNED_VEC *minmax_, const ALIGNED_VEC *x, unsigned int n)
 {
-	extern __shared__ VEC sminmax[];
+	extern __shared__ ALIGNED_VEC sminmax[];
 
     // perform first level of reduction,
     // reading from global memory, writing to shared memory
@@ -168,18 +171,19 @@ __global__ void minmaxReduce_krnl(VEC *minmax_, const VEC *x, unsigned int n)
 	{
 		if (tid == 0)
 		{
-			minmax_[blockIdx.x*2] = 99999999999 * ONES_VEC;
-			minmax_[blockIdx.x*2+1] = -99999999999 * ONES_VEC;
+			minmax_[blockIdx.x*2] = aligned_store(99999999999 * ONES_VEC);
+			minmax_[blockIdx.x*2+1] = aligned_store(-99999999999 * ONES_VEC);
 		}
 		return;
 	}
 
-	VEC val_min(x[i]), val_max(x[i]);
+	VEC val_min(aligned_load(x[i])), val_max(aligned_load(x[i]));
 
 	if (nIsPow2 || i + blockSize < n)
 	{
-		val_min = fmin(val_min, x[i+blockSize]);
-		val_max = fmax(val_max, x[i+blockSize]);
+		VEC xi = aligned_load(x[i+blockSize]);
+		val_min = fmin(val_min, xi);
+		val_max = fmax(val_max, xi);
 	}
 
 	i += gridSize;
@@ -189,93 +193,95 @@ __global__ void minmaxReduce_krnl(VEC *minmax_, const VEC *x, unsigned int n)
     // in a larger gridSize and therefore fewer elements per thread
 	while (i < n)
 	{
-		val_min = fmin(val_min, x[i]);
-		val_max = fmax(val_max, x[i]);
+		VEC xi = aligned_load(x[i]);
+		val_min = fmin(val_min, xi);
+		val_max = fmax(val_max, xi);
 
 		// ensure we don't read out of bounds -- this is optimized away for powerOf2 sized arrays
 		if (nIsPow2 || i + blockSize < n)
 		{
-			val_min = fmin(val_min, x[i+blockSize]);
-			val_max = fmax(val_max, x[i+blockSize]);
+			xi = aligned_load(x[i+blockSize]);
+			val_min = fmin(val_min, xi);
+			val_max = fmax(val_max, xi);
 		}
 
 		i += gridSize;
     }
 
 	// each thread puts its local reduction into shared memory
-	sminmax[sid] = val_min;
-	sminmax[sid+1] = val_max;
+	sminmax[sid] = aligned_store(val_min);
+	sminmax[sid+1] = aligned_store(val_max);
 	__syncthreads();
 
 	// do reduction in shared mem
 	if ((blockSize >= 1024) && (tid < 512))
 	{
-		sminmax[sid] = fmin(sminmax[sid], sminmax[sid + 1024]);
-		sminmax[sid+1] = fmax(sminmax[sid+1], sminmax[sid + 1025]);
+		sminmax[sid] = aligned_store(fmin(aligned_load(sminmax[sid]), aligned_load(sminmax[sid + 1024])));
+		sminmax[sid+1] = aligned_store(fmax(aligned_load(sminmax[sid+1]), aligned_load(sminmax[sid + 1025])));
 	}
 	__syncthreads();
 	
 	if ((blockSize >= 512) && (tid < 256))
 	{
-		sminmax[sid] = fmin(sminmax[sid], sminmax[sid + 512]);
-		sminmax[sid+1] = fmax(sminmax[sid+1], sminmax[sid + 513]);
+		sminmax[sid] = aligned_store(fmin(aligned_load(sminmax[sid]), aligned_load(sminmax[sid + 512])));
+		sminmax[sid+1] = aligned_store(fmax(aligned_load(sminmax[sid+1]), aligned_load(sminmax[sid + 513])));
 	}
 	__syncthreads();
 
 	if ((blockSize >= 256) && (tid < 128))
 	{
-		sminmax[sid] = fmin(sminmax[sid], sminmax[sid + 256]);
-		sminmax[sid+1] = fmax(sminmax[sid+1], sminmax[sid + 257]);
+		sminmax[sid] = aligned_store(fmin(aligned_load(sminmax[sid]), aligned_load(sminmax[sid + 256])));
+		sminmax[sid+1] = aligned_store(fmax(aligned_load(sminmax[sid+1]), aligned_load(sminmax[sid + 257])));
 	}
     __syncthreads();
 
     if ((blockSize >= 128) && (tid <  64))
 	{
-		sminmax[sid] = fmin(sminmax[sid], sminmax[sid + 128]);
-		sminmax[sid+1] = fmax(sminmax[sid+1], sminmax[sid + 129]);
+		sminmax[sid] = aligned_store(fmin(aligned_load(sminmax[sid]), aligned_load(sminmax[sid + 128])));
+		sminmax[sid+1] = aligned_store(fmax(aligned_load(sminmax[sid+1]), aligned_load(sminmax[sid + 129])));
 	}
     __syncthreads();
 
 	if ((blockSize >= 64) && (tid <  32))
 	{
-		sminmax[sid] = fmin(sminmax[sid], sminmax[sid + 64]);
-		sminmax[sid+1] = fmax(sminmax[sid+1], sminmax[sid + 65]);
+		sminmax[sid] = aligned_store(fmin(aligned_load(sminmax[sid]), aligned_load(sminmax[sid + 64])));
+		sminmax[sid+1] = aligned_store(fmax(aligned_load(sminmax[sid+1]), aligned_load(sminmax[sid + 65])));
 	}
     __syncthreads();
 
     // fully unroll reduction within a single warp
 	if ((blockSize >= 32) && (tid <  16))
 	{
-		sminmax[sid] = fmin(sminmax[sid], sminmax[sid + 32]);
-		sminmax[sid+1] = fmax(sminmax[sid+1], sminmax[sid + 33]);
+		sminmax[sid] = aligned_store(fmin(aligned_load(sminmax[sid]), aligned_load(sminmax[sid + 32])));
+		sminmax[sid+1] = aligned_store(fmax(aligned_load(sminmax[sid+1]), aligned_load(sminmax[sid + 33])));
 	}
 	__syncthreads();
 
 	if ((blockSize >= 16) && (tid <   8))
 	{
-		sminmax[sid] = fmin(sminmax[sid], sminmax[sid + 16]);
-		sminmax[sid+1] = fmax(sminmax[sid+1], sminmax[sid + 17]);
+		sminmax[sid] = aligned_store(fmin(aligned_load(sminmax[sid]), aligned_load(sminmax[sid + 16])));
+		sminmax[sid+1] = aligned_store(fmax(aligned_load(sminmax[sid+1]), aligned_load(sminmax[sid + 17])));
 	}
 	__syncthreads();
 
 	if ((blockSize >=  8) && (tid <   4))
 	{
-		sminmax[sid] = fmin(sminmax[sid], sminmax[sid + 8]);
-		sminmax[sid+1] = fmax(sminmax[sid+1], sminmax[sid + 9]);
+		sminmax[sid] = aligned_store(fmin(aligned_load(sminmax[sid]), aligned_load(sminmax[sid + 8])));
+		sminmax[sid+1] = aligned_store(fmax(aligned_load(sminmax[sid+1]), aligned_load(sminmax[sid + 9])));
 	}
 	__syncthreads();
 
 	if ((blockSize >=  4) && (tid <   2))
 	{
-		sminmax[sid] = fmin(sminmax[sid], sminmax[sid + 4]);
-		sminmax[sid+1] = fmax(sminmax[sid+1], sminmax[sid + 5]);
+		sminmax[sid] = aligned_store(fmin(aligned_load(sminmax[sid]), aligned_load(sminmax[sid + 4])));
+		sminmax[sid+1] = aligned_store(fmax(aligned_load(sminmax[sid+1]), aligned_load(sminmax[sid + 5])));
 	}
 	__syncthreads();
 
 	if ((blockSize >=  2) && (tid == 0))
 	{
-		sminmax[0] = fmin(sminmax[0], sminmax[2]);
-		sminmax[1] = fmax(sminmax[1], sminmax[3]);
+		sminmax[0] = aligned_store(fmin(aligned_load(sminmax[0]), aligned_load(sminmax[2])));
+		sminmax[1] = aligned_store(fmax(aligned_load(sminmax[1]), aligned_load(sminmax[3])));
 	}
 	__syncthreads();
 
@@ -287,9 +293,9 @@ __global__ void minmaxReduce_krnl(VEC *minmax_, const VEC *x, unsigned int n)
 	}
 }
 
-void minmaxReduce(VEC *minmax, const VEC *src, unsigned int n, int nBlocksRed = 1)
+void minmaxReduce(ALIGNED_VEC *minmax, const ALIGNED_VEC *src, unsigned int n, int nBlocksRed = 1)
 {
-	int smemSize = (BLOCK_SIZE <= 32) ? 2 * BLOCK_SIZE * sizeof(VEC)*2 : BLOCK_SIZE * sizeof(VEC)*2;
+	int smemSize = (BLOCK_SIZE <= 32) ? 2 * BLOCK_SIZE * sizeof(ALIGNED_VEC)*2 : BLOCK_SIZE * sizeof(ALIGNED_VEC)*2;
 	if (isPow2(n))
 	{
 		switch (BLOCK_SIZE)
@@ -353,7 +359,7 @@ void minmaxReduce(VEC *minmax, const VEC *src, unsigned int n, int nBlocksRed = 
 }
 
 template <int blockSize, bool nIsPow2>
-__global__ void relerrReduce_krnl(SCAL *relerr, const VEC *x, const VEC *xref, unsigned int n)
+__global__ void relerrReduce_krnl(SCAL *relerr, const ALIGNED_VEC *x, const ALIGNED_VEC *xref, unsigned int n)
 {
 	extern __shared__ SCAL srelerr[];
 
@@ -372,10 +378,10 @@ __global__ void relerrReduce_krnl(SCAL *relerr, const VEC *x, const VEC *xref, u
 
 	while (i < n)
 	{
-		val += rel_diff1(x[i], xref[i]);
+		val += rel_diff1(aligned_load(x[i]), aligned_load(xref[i]));
 
 		if (nIsPow2 || i + blockSize < n)
-			val += rel_diff1(x[i+blockSize], xref[i+blockSize]);
+			val += rel_diff1(aligned_load(x[i+blockSize]), aligned_load(xref[i+blockSize]));
 
 		i += gridSize;
     }
@@ -429,7 +435,7 @@ __global__ void relerrReduce_krnl(SCAL *relerr, const VEC *x, const VEC *xref, u
 		relerr[blockIdx.x] = srelerr[0];
 }
 
-void relerrReduce(SCAL *relerr, const VEC *x, const VEC *xref, unsigned int n, int nBlocksRed = 1)
+void relerrReduce(SCAL *relerr, const ALIGNED_VEC *x, const ALIGNED_VEC *xref, unsigned int n, int nBlocksRed = 1)
 {
 	int smemSize = (BLOCK_SIZE <= 32) ? 2 * BLOCK_SIZE * sizeof(SCAL) : BLOCK_SIZE * sizeof(SCAL);
 	if (isPow2(n))
@@ -501,7 +507,7 @@ inline __host__ __device__ VEC binarypow(VEC x, int n)
 	VEC y = ONES_VEC;
 	while (n > 1)
 	{
-		y *= ((n & 1) ? x : ONES_VEC);
+		y *= (n & 1) ? x : ONES_VEC;
 		x *= x;
 		n /= 2;
 	}
@@ -509,11 +515,11 @@ inline __host__ __device__ VEC binarypow(VEC x, int n)
 }
 
 template <int blockSize, bool nIsPow2>
-__global__ void powReduce_krnl(VEC *power, const VEC *x, int expo, unsigned int n)
+__global__ void powReduce_krnl(ALIGNED_VEC *power, const ALIGNED_VEC *x, int expo, unsigned int n)
 // sum the powers of vectors x:
 // power = sum_i x_i ^ expo
 {
-	extern __shared__ VEC spow[];
+	extern __shared__ ALIGNED_VEC spow[];
 
 	unsigned int tid = threadIdx.x;
 	unsigned int i = blockIdx.x*blockSize*2 + threadIdx.x;
@@ -522,7 +528,7 @@ __global__ void powReduce_krnl(VEC *power, const VEC *x, int expo, unsigned int 
 	if (i >= n)
 	{
 		if (tid == 0)
-			power[blockIdx.x] = VEC{};
+			power[blockIdx.x] = ALIGNED_VEC{};
 		return;
 	}
 
@@ -530,56 +536,56 @@ __global__ void powReduce_krnl(VEC *power, const VEC *x, int expo, unsigned int 
 
 	while (i < n)
 	{
-		v += binarypow(x[i], expo);
+		v += binarypow(aligned_load(x[i]), expo);
 
 		if (nIsPow2 || i + blockSize < n)
-			v += binarypow(x[i+blockSize], expo);
+			v += binarypow(aligned_load(x[i+blockSize]), expo);
 
 		i += gridSize;
     }
 
-	spow[tid] = v;
+	spow[tid] = aligned_store(v);
 	__syncthreads();
 	
 	if ((blockSize >= 1024) && (tid < 512))
-		spow[tid] += spow[tid + 512];
+		spow[tid] = aligned_store(aligned_load(spow[tid]) + aligned_load(spow[tid + 512]));
 	__syncthreads();
 
 	if ((blockSize >= 512) && (tid < 256))
-		spow[tid] += spow[tid + 256];
+		spow[tid] = aligned_store(aligned_load(spow[tid]) + aligned_load(spow[tid + 256]));
 	__syncthreads();
 
 	if ((blockSize >= 256) && (tid < 128))
-		spow[tid] += spow[tid + 128];
+		spow[tid] = aligned_store(aligned_load(spow[tid]) + aligned_load(spow[tid + 128]));
      __syncthreads();
 
     if ((blockSize >= 128) && (tid <  64))
-		spow[tid] += spow[tid +  64];
+		spow[tid] = aligned_store(aligned_load(spow[tid]) + aligned_load(spow[tid +  64]));
     __syncthreads();
 
 	if ((blockSize >= 64) && (tid <  32))
-		spow[tid] += spow[tid + 32];
+		spow[tid] = aligned_store(aligned_load(spow[tid]) + aligned_load(spow[tid + 32]));
     __syncthreads();
 
     // fully unroll reduction within a single warp
 	if ((blockSize >= 32) && (tid <  16))
-		spow[tid] += spow[tid + 16];
+		spow[tid] = aligned_store(aligned_load(spow[tid]) + aligned_load(spow[tid + 16]));
 	__syncthreads();
 
 	if ((blockSize >= 16) && (tid <   8))
-		spow[tid] += spow[tid +  8];
+		spow[tid] = aligned_store(aligned_load(spow[tid]) + aligned_load(spow[tid +  8]));
 	__syncthreads();
 
 	if ((blockSize >=  8) && (tid <   4))
-		spow[tid] += spow[tid +  4];
+		spow[tid] = aligned_store(aligned_load(spow[tid]) + aligned_load(spow[tid +  4]));
 	__syncthreads();
 
 	if ((blockSize >=  4) && (tid <   2))
-		spow[tid] += spow[tid +  2];
+		spow[tid] = aligned_store(aligned_load(spow[tid]) + aligned_load(spow[tid +  2]));
 	__syncthreads();
 
 	if ((blockSize >=  2) && (tid == 0))
-		spow[tid] += spow[tid +  1];
+		spow[tid] = aligned_store(aligned_load(spow[tid]) + aligned_load(spow[tid +  1]));
 	__syncthreads();
 
     // write result for this block to global mem
@@ -587,9 +593,9 @@ __global__ void powReduce_krnl(VEC *power, const VEC *x, int expo, unsigned int 
 		power[blockIdx.x] = spow[0];
 }
 
-void powReduce(VEC *power, const VEC *x, int expo, unsigned int n, int nBlocksRed = 1)
+void powReduce(ALIGNED_VEC *power, const ALIGNED_VEC *x, int expo, unsigned int n, int nBlocksRed = 1)
 {
-	int smemSize = (BLOCK_SIZE <= 32) ? 2 * BLOCK_SIZE * sizeof(VEC) : BLOCK_SIZE * sizeof(VEC);
+	int smemSize = (BLOCK_SIZE <= 32) ? 2 * BLOCK_SIZE * sizeof(ALIGNED_VEC) : BLOCK_SIZE * sizeof(ALIGNED_VEC);
 	if (isPow2(n))
 	{
 		switch (BLOCK_SIZE)

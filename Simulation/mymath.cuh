@@ -14,9 +14,8 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef KERNEL_CUDA_H
-#error "This CUDA header file can be included only from file kernel.cuh"
-#else
+#ifndef MYMATH_CUDA_H
+#include "kernel.cuh"
 
 // host-side constants
 
@@ -718,4 +717,4 @@ inline __device__ __host__ VEC_T(SCAL, 4) fma(const SCAL* k, VEC_T(SCAL, 4) a, V
 	return c;
 }
 
-#endif // KERNEL_CUDA_H
+#endif // MYMATH_CUDA_H

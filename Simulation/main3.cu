@@ -28,6 +28,7 @@ nvprof nbco3 -test
 ncu -f -o profile nbco3 -test
 
 ncu --section SchedulerStats --section WarpStateStats --section SourceCounters -o profile nbco3 -test -n 100000 -r 2 -p 4
+ncu --set full -o profile nbco3 -test -n 100000 -r 2 -p 4
 
 For debugging:
 nvcc -lineinfo main3.cu -o nbco3 --expt-relaxed-constexpr <std=c++20>
@@ -48,54 +49,57 @@ compute-sanitizer --print-limit 1 nbco3 -test
 
 using namespace std::chrono;
 
-void coulombOscillatorDirect(VEC *p, VEC *a, int n, const SCAL* param)
+void coulombOscillatorDirect(ALIGNED_VEC *p, ALIGNED_VEC *a, int n, const SCAL* param)
 {
 	direct3(p, a, n, param);
-	add_elastic(p, a, n, param+3); // shift pointer
+	add_elastic(p, a, n, param+4); // shift pointer
 }
 
-void coulombOscillatorDirect_cpu(VEC *p, VEC *a, int n, const SCAL* param)
+void coulombOscillatorDirect_cpu(ALIGNED_VEC *p, ALIGNED_VEC *a, int n, const SCAL* param)
 {
 	direct3_cpu(p, a, n, param);
-	add_elastic_cpu(p, a, n, param+3); // shift pointer
+	add_elastic_cpu(p, a, n, param+4); // shift pointer
 }
 
-void coulombOscillatorFMMKD3(VEC *p, VEC *a, int n, const SCAL* param)
+void coulombOscillatorFMMKD3(ALIGNED_VEC *p, ALIGNED_VEC *a, int n, const SCAL* param)
 {
 	fmm_cart3_kdtree(p, a, n, param);
-	add_elastic(p, a, n, param+3); // shift pointer
+	add_elastic(p, a, n, param+4); // shift pointer
 }
 
-void coulombOscillatorFMMKD3_cpu(VEC *p, VEC *a, int n, const SCAL* param)
+void coulombOscillatorFMMKD3_cpu(ALIGNED_VEC *p, ALIGNED_VEC *a, int n, const SCAL* param)
 {
 	fmm_cart3_kdtree_cpu(p, a, n, param);
-	add_elastic_cpu(p, a, n, param+3); // shift pointer
+	add_elastic_cpu(p, a, n, param+4); // shift pointer
 }
 
-void centerDist(VEC *data, int n)
+void centerDist(ALIGNED_VEC *data, int n)
 // center the sampled distribution
 {
 	VEC d{};
 	for (int i = 0; i < n; ++i)
-		d += data[i];
+		d += aligned_load(data[i]);
 	d /= (SCAL)n;
 	for (int i = 0; i < n; ++i)
-		data[i] -= d;
+		data[i] = aligned_store(aligned_load(data[i]) - d);
 }
 
-void adjustRMS(VEC *data, int n, VEC adj)
+void adjustRMS(ALIGNED_VEC *data, int n, VEC adj)
 // adjust the RMS of the sampled distribution such that it's equal to adj
 {
-	VEC d{};
+	VEC d{}, datai;
 	for (int i = 0; i < n; ++i)
-		d += data[i]*data[i];
+	{
+		datai = aligned_load(data[i]);
+		d += datai*datai;
+	}
 	d /= (SCAL)n;
 	d = sqrt(d);
 	for (int i = 0; i < n; ++i)
-		data[i] *= adj / d;
+		data[i] = aligned_store(aligned_load(data[i]) * adj / d);
 }
 
-void initU(VEC *data, int n, VEC a, VEC b, std::mt19937_64 &gen)
+void initU(ALIGNED_VEC *data, int n, VEC a, VEC b, std::mt19937_64 &gen)
 // Uniform distribution over a rectangular cuboid
 // velocities remain uninitialized
 // a_j < x_ij < b_j for each particle i and coordinate j = 1,2,3
@@ -105,31 +109,41 @@ void initU(VEC *data, int n, VEC a, VEC b, std::mt19937_64 &gen)
 	std::uniform_real_distribution<SCAL> disty(a.y, b.y);
 	std::uniform_real_distribution<SCAL> distz(a.z, b.z);
 
+	VEC d;
 	for (int i = 0; i < nBodies; ++i)
 	{
-		data[i].x = distx(gen);
-		data[i].y = disty(gen);
-		data[i].z = distz(gen);
+		d.x = distx(gen);
+		d.y = disty(gen);
+		d.z = distz(gen);
+		data[i] = aligned_store(d);
 	}
 
 	centerDist(data, nBodies);
 }
 
-void initGA(VEC *data, int n, VEC x, VEC u, std::mt19937_64 &gen)
+void initGA(ALIGNED_VEC *data, int n, VEC x, VEC u, std::mt19937_64 &gen)
 // Gaussian distribution
 // x is the position std.dev.
 // u is the velocity std.dev.
 {
 	std::normal_distribution<SCAL> dist((SCAL)0, (SCAL)1); // Marsaglia method?
 									// mean = 0, std.dev. = 1
-	SCAL *s_data = (SCAL*)data;
-	for (int i = 0; i < n*DIM; ++i)
-		s_data[i] = dist(gen);
 	int nBodies = n/2;
+	VEC d;
 	for (int i = 0; i < nBodies; ++i)
-		data[i] *= x;
-	for (int i = nBodies; i < n; ++i)
-		data[i] *= u;
+	{
+		d.x = dist(gen)*x.x;
+		d.y = dist(gen)*x.y;
+		d.z = dist(gen)*x.z;
+		data[i] = aligned_store(d);
+	}
+	for (int i = nBodies; i < 2*nBodies; ++i)
+	{
+		d.x = dist(gen)*u.x;
+		d.y = dist(gen)*u.y;
+		d.z = dist(gen)*u.z;
+		data[i] = aligned_store(d);
+	}
 
 	centerDist(data, nBodies);
 	adjustRMS(data, nBodies, x);
@@ -140,7 +154,7 @@ void initGA(VEC *data, int n, VEC x, VEC u, std::mt19937_64 &gen)
 	adjustRMS(data, nBodies, u);
 }
 
-SCAL test_accuracy(void(*test)(VEC*, VEC*, int, const SCAL*), void(*ref)(VEC*, VEC*, int, const SCAL*),
+SCAL test_accuracy(void(*test)(ALIGNED_VEC*, ALIGNED_VEC*, int, const SCAL*), void(*ref)(ALIGNED_VEC*, ALIGNED_VEC*, int, const SCAL*),
 				   SCAL *d_buf, int n, const SCAL* param, bool b_update = false)
 // test the accuracy of "test" function with respect to the reference "ref" function
 // print the mean relative error on console window
@@ -148,7 +162,7 @@ SCAL test_accuracy(void(*test)(VEC*, VEC*, int, const SCAL*), void(*ref)(VEC*, V
 	static int n_max = 0;
 	static SCAL *d_relerr = nullptr;
 	static SCAL relerr;
-	static VEC *d_tmp = nullptr;
+	static ALIGNED_VEC *d_tmp = nullptr;
 	if (n > n_max)
 	{
 		if (n_max > 0)
@@ -156,7 +170,7 @@ SCAL test_accuracy(void(*test)(VEC*, VEC*, int, const SCAL*), void(*ref)(VEC*, V
 			gpuErrchk(cudaFree(d_tmp));
 			gpuErrchk(cudaFree(d_relerr));
 		}
-		gpuErrchk(cudaMalloc((void**)&d_tmp, sizeof(VEC)*n));
+		gpuErrchk(cudaMalloc((void**)&d_tmp, sizeof(ALIGNED_VEC)*n));
 		gpuErrchk(cudaMalloc((void**)&d_relerr, sizeof(SCAL)));
 	}
 	if (::b_unsort)
@@ -164,17 +178,17 @@ SCAL test_accuracy(void(*test)(VEC*, VEC*, int, const SCAL*), void(*ref)(VEC*, V
 		if (b_update || n != n_max)
 		{
 			compute_force(ref, d_buf, n, param);
-			copy_gpu(d_tmp, (VEC*)d_buf + 2 * n, n);
+			copy_gpu(d_tmp, (ALIGNED_VEC*)d_buf + 2 * n, n);
 		}
 		compute_force(test, d_buf, n, param);
-		relerrReduce2(d_relerr, (VEC*)d_buf + 2 * n, d_tmp, n);
+		relerrReduce2(d_relerr, (ALIGNED_VEC*)d_buf + 2 * n, d_tmp, n);
 	}
 	else
 	{
 		compute_force(test, d_buf, n, param);
-		copy_gpu(d_tmp, (VEC*)d_buf + 2 * n, n);
+		copy_gpu(d_tmp, (ALIGNED_VEC*)d_buf + 2 * n, n);
 		compute_force(ref, d_buf, n, param);
-		relerrReduce2(d_relerr, d_tmp, (VEC*)d_buf + 2 * n, n);
+		relerrReduce2(d_relerr, d_tmp, (ALIGNED_VEC*)d_buf + 2 * n, n);
 	}
 
 	gpuErrchk(cudaMemcpy(&relerr, d_relerr, sizeof(SCAL), cudaMemcpyDeviceToHost));
@@ -185,7 +199,7 @@ SCAL test_accuracy(void(*test)(VEC*, VEC*, int, const SCAL*), void(*ref)(VEC*, V
 	return relerr;
 }
 
-SCAL test_accuracy_cpu(void(*test)(VEC*, VEC*, int, const SCAL*), void(*ref)(VEC*, VEC*, int, const SCAL*),
+SCAL test_accuracy_cpu(void(*test)(ALIGNED_VEC*, ALIGNED_VEC*, int, const SCAL*), void(*ref)(ALIGNED_VEC*, ALIGNED_VEC*, int, const SCAL*),
 					   SCAL *buf, int n, const SCAL* param)
 // test the accuracy of "test" function with respect to the reference "ref" function
 // print the mean relative error on console window
@@ -193,15 +207,15 @@ SCAL test_accuracy_cpu(void(*test)(VEC*, VEC*, int, const SCAL*), void(*ref)(VEC
 {
 	static int n_max = 0;
 	std::vector<SCAL> relerr(CPU_THREADS);
-	static VEC *tmp = nullptr;
+	static ALIGNED_VEC *tmp = nullptr;
 	if (n > n_max)
 	{
 		if (n_max > 0)
 			delete[] tmp;
-		tmp = new VEC[n];
+		tmp = new ALIGNED_VEC[n];
 	}
 	compute_force(test, buf, n, param);
-	copy_cpu(tmp, (VEC*)buf + 2 * n, n);
+	copy_cpu(tmp, (ALIGNED_VEC*)buf + 2 * n, n);
 	compute_force(ref, buf, n, param);
 
 	std::vector<std::thread> threads(CPU_THREADS);
@@ -209,9 +223,9 @@ SCAL test_accuracy_cpu(void(*test)(VEC*, VEC*, int, const SCAL*), void(*ref)(VEC
 	for (int i = 0; i < CPU_THREADS; ++i)
 		threads[i] = std::thread([=, &relerr] {
 			SCAL err(0);
-			VEC *bufacc = (VEC*)buf + 2*n;
+			ALIGNED_VEC *bufacc = (ALIGNED_VEC*)buf + 2*n;
 			for (int j = niter*i; j < std::min(n, niter*(i+1)); ++j)
-				err += rel_diff1(tmp[j], bufacc[j]);
+				err += rel_diff1(aligned_load(tmp[j]), aligned_load(bufacc[j]));
 			relerr[i] = err;
 		});
 	for (int i = 0; i < CPU_THREADS; ++i)
@@ -637,9 +651,9 @@ int main(const int argc, const char** argv)
 		{
 			fin.ignore(std::numeric_limits<std::streamsize>::max());
 			cpyBytes = (int)fin.gcount();
-			nBodies = cpyBytes / 2 / sizeof(VEC);
-			bytes = 3 * nBodies * sizeof(VEC);
-			c_buf = new char[bytes];
+			nBodies = cpyBytes / 2 / sizeof(ALIGNED_VEC);
+			bytes = 3 * nBodies * sizeof(ALIGNED_VEC);
+			c_buf = (char*)(new ALIGNED_VEC[bytes/sizeof(ALIGNED_VEC)]);
 			buf = (SCAL*)c_buf;
 			fin.clear();
 			fin.seekg(0, std::ios::beg);
@@ -656,18 +670,18 @@ int main(const int argc, const char** argv)
 	}
 	else
 	{
-		bytes = 3 * nBodies * sizeof(VEC);
-		cpyBytes = 2 * nBodies * sizeof(VEC);
-		c_buf = new char[bytes];
+		bytes = 3 * nBodies * sizeof(ALIGNED_VEC);
+		cpyBytes = 2 * nBodies * sizeof(ALIGNED_VEC);
+		c_buf = (char*)(new ALIGNED_VEC[bytes/sizeof(ALIGNED_VEC)]);
 		buf = (SCAL*)c_buf;
 		
 		//std::cout << "emittances: " << x * u << std::endl;
 
 		std::mt19937_64 gen(5351550349027530206);
 		gen.discard(624*2);
-		initGA((VEC*)buf, 2 * nBodies, x, u, gen);
+		initGA((ALIGNED_VEC*)buf, 2 * nBodies, x, u, gen);
 		if (test)
-			initU((VEC*)buf, 2 * nBodies, {-1, -1, -1}, {1, 1, 1}, gen);
+			initU((ALIGNED_VEC*)buf, 2 * nBodies, {-1, -1, -1}, {1, 1, 1}, gen);
 	}
 
 	if (!test && !test2)
@@ -686,14 +700,19 @@ int main(const int argc, const char** argv)
 		}
 	}
 	
-	SCAL par[]{
-		xi/(SCAL)nBodies, // xi/N
-		0, // padding
-		0, // padding
-		omega0.x*omega0.x, // omegax0^2 = kx
-		omega0.y*omega0.y, // omegay0^2 = ky
-		omega0.z*omega0.z, // omegay0^2 = kz
+	ALIGNED_VEC apar[]{
+		{
+			xi/(SCAL)nBodies, // xi/N
+			0, // padding
+			0, // padding
+		},
+		{
+			omega0.x*omega0.x, // omegax0^2 = kx
+			omega0.y*omega0.y, // omegay0^2 = ky
+			omega0.z*omega0.z, // omegay0^2 = kz
+		},
 	};
+	SCAL *par = (SCAL*)apar;
 
 	SCAL *d_buf, *d_par;
 
@@ -701,11 +720,11 @@ int main(const int argc, const char** argv)
 	{
 		 // allocate memory on GPU
 		gpuErrchk(cudaMalloc((void**)&d_buf, bytes));
-		gpuErrchk(cudaMalloc((void**)&d_par, 6*sizeof(SCAL)));
+		gpuErrchk(cudaMalloc((void**)&d_par, 2*sizeof(ALIGNED_VEC)));
 
 		// copy data from CPU to GPU
 		gpuErrchk(cudaMemcpy(d_buf, buf, cpyBytes, cudaMemcpyHostToDevice)); // acc not copied
-		gpuErrchk(cudaMemcpy(d_par, par, 6*sizeof(SCAL), cudaMemcpyHostToDevice));
+		gpuErrchk(cudaMemcpy(d_par, par, 2*sizeof(ALIGNED_VEC), cudaMemcpyHostToDevice));
 	}
 
 	auto test_time = [cpu, nBodies, buf, par, d_buf, d_par](bool warming_up = true, SCAL min_loop = 0, int loop_n = 1)

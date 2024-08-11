@@ -19,9 +19,9 @@
 
 #include "kernel.cuh"
 
-void compute_force(void(*f)(VEC*, VEC*, int, const SCAL*), SCAL *d_buf, int n, const SCAL* param)
+void compute_force(void(*f)(ALIGNED_VEC*, ALIGNED_VEC*, int, const SCAL*), SCAL *d_buf, int n, const SCAL* param)
 {
-	ParticleSystem d_p = { (VEC*)d_buf, ((VEC*)d_buf) + n, ((VEC*)d_buf) + 2 * n };
+	ParticleSystem d_p = { (ALIGNED_VEC*)d_buf, ((ALIGNED_VEC*)d_buf) + n, ((ALIGNED_VEC*)d_buf) + 2 * n };
 
 	// a = f(x)
 	f(d_p.pos, d_p.acc, n, param);
@@ -29,13 +29,13 @@ void compute_force(void(*f)(VEC*, VEC*, int, const SCAL*), SCAL *d_buf, int n, c
 
 // symplectic methods
 
-void symplectic_euler(void(*f)(VEC*, VEC*, int, const SCAL*), SCAL *d_buf, int n,
+void symplectic_euler(void(*f)(ALIGNED_VEC*, ALIGNED_VEC*, int, const SCAL*), SCAL *d_buf, int n,
                       const SCAL* param, long double dt,
-                      void(*step_func)(VEC*, const VEC*, SCAL, int) = step,
+                      void(*step_func)(ALIGNED_VEC*, const ALIGNED_VEC*, SCAL, int) = step,
                       long double scale = 1)
 // 1st order
 {
-	ParticleSystem d_p = { (VEC*)d_buf, ((VEC*)d_buf) + n, ((VEC*)d_buf) + 2 * n };
+	ParticleSystem d_p = { (ALIGNED_VEC*)d_buf, ((ALIGNED_VEC*)d_buf) + n, ((ALIGNED_VEC*)d_buf) + 2 * n };
 
 	// v += a * dt
 	step_func(d_p.vel, d_p.acc, dt * scale, n);
@@ -47,13 +47,13 @@ void symplectic_euler(void(*f)(VEC*, VEC*, int, const SCAL*), SCAL *d_buf, int n
 	f(d_p.pos, d_p.acc, n, param);
 }
 
-void pre_symplectic_euler(void(*f)(VEC*, VEC*, int, const SCAL*), SCAL *d_buf, int n,
+void pre_symplectic_euler(void(*f)(ALIGNED_VEC*, ALIGNED_VEC*, int, const SCAL*), SCAL *d_buf, int n,
                           const SCAL* param, long double dt,
-                          void(*step_func)(VEC*, const VEC*, SCAL, int) = step,
+                          void(*step_func)(ALIGNED_VEC*, const ALIGNED_VEC*, SCAL, int) = step,
                           long double scale = 1)
 // 1st order
 {
-	ParticleSystem d_p = { (VEC*)d_buf, ((VEC*)d_buf) + n, ((VEC*)d_buf) + 2 * n };
+	ParticleSystem d_p = { (ALIGNED_VEC*)d_buf, ((ALIGNED_VEC*)d_buf) + n, ((ALIGNED_VEC*)d_buf) + 2 * n };
 
 	// a = f(x)
 	f(d_p.pos, d_p.acc, n, param);
@@ -66,19 +66,19 @@ void pre_symplectic_euler(void(*f)(VEC*, VEC*, int, const SCAL*), SCAL *d_buf, i
 }
 
 void leapfrog(
-	void(*f)(VEC*, VEC*, int, const SCAL*),	// pointer to function for the evaulation of the field f(x)
-	SCAL *d_buf,                            // pointer to buffer containing x, v, a
-	int n,                                  // number of particles
-	const SCAL* param,                      // additional parameters
-	long double dt,                         // timestep
-	void(*step_func)(VEC*, const VEC*, SCAL, int) = step, // pointer to function for step (multiply/addition)
-	long double scale = 1                   // quantity that rescales the field f(x)
+	void(*f)(ALIGNED_VEC*, ALIGNED_VEC*, int, const SCAL*),	              // pointer to function for the evaulation of the field f(x)
+	SCAL *d_buf,                                                          // pointer to buffer containing x, v, a
+	int n,                                                                // number of particles
+	const SCAL* param,                                                    // additional parameters
+	long double dt,                                                       // timestep
+	void(*step_func)(ALIGNED_VEC*, const ALIGNED_VEC*, SCAL, int) = step, // pointer to function for step (multiply/addition)
+	long double scale = 1                                                 // quantity that rescales the field f(x)
 )
 // 2nd order
 {
-	ParticleSystem d_p = { (VEC*)d_buf, // positions
-						  ((VEC*)d_buf) + n, // velocities
-						  ((VEC*)d_buf) + 2 * n // accelerations
+	ParticleSystem d_p = { (ALIGNED_VEC*)d_buf, // positions
+	                      ((ALIGNED_VEC*)d_buf) + n, // velocities
+	                      ((ALIGNED_VEC*)d_buf) + 2 * n // accelerations
 	};
 	long double ds = dt * scale * 0.5L;
 
@@ -97,15 +97,15 @@ void leapfrog(
 
 constexpr long double fr_par = 1.3512071919596576340476878089715L; // 1 / (2 - cbrt(2))
 
-void forestruth(void(*f)(VEC*, VEC*, int, const SCAL*), SCAL *d_buf, int n,
-				const SCAL* param, long double dt, void(*step_func)(VEC*, const VEC*, SCAL, int) = step,
+void forestruth(void(*f)(ALIGNED_VEC*, ALIGNED_VEC*, int, const SCAL*), SCAL *d_buf, int n,
+				const SCAL* param, long double dt, void(*step_func)(ALIGNED_VEC*, const ALIGNED_VEC*, SCAL, int) = step,
 				long double scale = 1)
 // Forest-Ruth method
 // 4th order
 {
-	ParticleSystem d_p = { (VEC*)d_buf, // positions
-						  ((VEC*)d_buf) + n, // velocities
-						  ((VEC*)d_buf) + 2 * n // accelerations
+	ParticleSystem d_p = { (ALIGNED_VEC*)d_buf, // positions
+	                      ((ALIGNED_VEC*)d_buf) + n, // velocities
+	                      ((ALIGNED_VEC*)d_buf) + 2 * n // accelerations
 	};
 	long double ds = dt * scale;
 
@@ -131,15 +131,15 @@ constexpr long double pefrl_parx = +0.1786178958448091E+00L;
 constexpr long double pefrl_parl = -0.2123418310626054E+00L;
 constexpr long double pefrl_parc = -0.6626458266981849E-01L;
 
-void pefrl(void(*f)(VEC*, VEC*, int, const SCAL*), SCAL *d_buf, int n,
-				const SCAL* param, long double dt, void(*step_func)(VEC*, const VEC*, SCAL, int) = step,
+void pefrl(void(*f)(ALIGNED_VEC*, ALIGNED_VEC*, int, const SCAL*), SCAL *d_buf, int n,
+				const SCAL* param, long double dt, void(*step_func)(ALIGNED_VEC*, const ALIGNED_VEC*, SCAL, int) = step,
 				long double scale = 1)
 // Position-extended Forest-Ruth-like method
 // 4th order, slower but more accurate
 {
-	ParticleSystem d_p = { (VEC*)d_buf, // positions
-						  ((VEC*)d_buf) + n, // velocities
-						  ((VEC*)d_buf) + 2 * n // accelerations
+	ParticleSystem d_p = { (ALIGNED_VEC*)d_buf, // positions
+	                      ((ALIGNED_VEC*)d_buf) + n, // velocities
+	                      ((ALIGNED_VEC*)d_buf) + 2 * n // accelerations
 	};
 	long double ds = dt * scale;
 
