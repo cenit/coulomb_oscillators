@@ -48,7 +48,7 @@ inline __host__ __device__ void evalKeys_krnl(int *keys, const ALIGNED_VEC *p, c
 	for (int i = begi; i < endi; i += stride)
 	{
 		IVEC iD = to_ivec((aligned_load(p[i]) - aligned_load(min[0])) * rdelta);
-		iD = clip(iD, 0, side-1); // mymath.cuh
+		iD = clamp(iD, 0, side-1); // mymath.cuh
 		
 		keys[i] = flatten(iD, side); // mymath.cuh
 	}

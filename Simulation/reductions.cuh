@@ -29,7 +29,7 @@
 #define ONES_VEC VEC{1,1,1,1}
 #endif
 
-bool isPow2(unsigned int x)
+inline __forceinline__ __host__ __device__ bool isPow2(unsigned int x)
 {
     return (x&(x-1))==0;
 }

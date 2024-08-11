@@ -52,7 +52,7 @@ bool coll = true, b_unsort = true;
 SCAL dens_inhom = 1;
 
 template <typename T>
-inline __device__ T myAtomicAdd(T* address, T val)
+inline __forceinline__ __device__ T myAtomicAdd(T* address, T val)
 {
 	return atomicAdd(address, val);
 }
@@ -75,12 +75,12 @@ inline __device__ double myAtomicAdd(double* address, double val)
 #endif // __CUDA_ARCH__ < 600
 
 template <typename T>
-inline __device__ T myAtomicMin(T* address, T val)
+inline __forceinline__ __device__ T myAtomicMin(T* address, T val)
 {
 	return atomicMin(address, val);
 }
 template <typename T>
-inline __device__ T myAtomicMax(T* address, T val)
+inline __forceinline__ __device__ T myAtomicMax(T* address, T val)
 {
 	return atomicMax(address, val);
 }
@@ -107,7 +107,7 @@ inline __device__ double myAtomicMax(double* address, double val)
 		: __longlong_as_double(atomicMin((unsigned long long*)address, (unsigned long long)__double_as_longlong(val)));
 }
 
-inline __host__ __device__ uint32_t clz(uint32_t val)
+inline __forceinline__ __host__ __device__ uint32_t clz(uint32_t val)
 // count leading zeros
 {
 #ifdef __CUDA_ARCH__
@@ -117,7 +117,7 @@ inline __host__ __device__ uint32_t clz(uint32_t val)
 #endif
 }
 
-inline __host__ __device__ uint32_t bitceil(uint32_t val)
+inline __forceinline__ __host__ __device__ uint32_t bitceil(uint32_t val)
 // find the smallest power of two that is equal to or greater than `val`
 // used in `fmm_p2p3_kdtree` and in `fmm_p2p3_kdtree_coalesced` inside `fmm_cart3_kdtree.cuh`
 {
@@ -130,11 +130,11 @@ inline __host__ __device__ uint32_t bitceil(uint32_t val)
 #endif
 }
 
-inline __host__ __device__ float reciprocal_sqrt(float x)
+inline __forceinline__ __host__ __device__ float reciprocal_sqrt(float x)
 {
 	return rsqrtf(x);
 }
-inline __host__ __device__ double reciprocal_sqrt(double x)
+inline __forceinline__ __host__ __device__ double reciprocal_sqrt(double x)
 {
 	return rsqrt(x);
 }
@@ -196,7 +196,7 @@ inline __host__ __device__ mu magicu(unsigned d)
 	return magu; // (magu.a was set above)
 }
 
-inline __host__ __device__ unsigned magicdivu(unsigned x, mu magic)
+inline __forceinline__ __host__ __device__ unsigned magicdivu(unsigned x, mu magic)
 // magic unsigned division
 {
 #ifdef __CUDA_ARCH__
@@ -206,7 +206,7 @@ inline __host__ __device__ unsigned magicdivu(unsigned x, mu magic)
 #endif
 }
 
-inline __host__ __device__ unsigned magicremu(unsigned x, unsigned d, mu magic)
+inline __forceinline__ __host__ __device__ unsigned magicremu(unsigned x, unsigned d, mu magic)
 // magic unsigned remainder
 // d is the divisor, the same as the one used to construct the magic number
 {

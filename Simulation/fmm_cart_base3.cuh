@@ -21,7 +21,7 @@
 
 #include "fmm_cart_base.cuh"
 
-inline __host__ __device__ SCAL coeff13(int n, int m)
+inline __forceinline__ __host__ __device__ SCAL coeff13(int n, int m)
 // a coefficient used in the calculation of the gradient
 // returns (-1)^m * (2n - 2m - 1)!!
 // assumes m <= n/2 and n >= 1
@@ -30,7 +30,7 @@ inline __host__ __device__ SCAL coeff13(int n, int m)
 	// for DIM > 3, see Shanker, Huang, 2007
 }
 
-inline __host__ __device__ SCAL dyn_coeff13(int n, int m)
+inline __forceinline__ __host__ __device__ SCAL dyn_coeff13(int n, int m)
 // a coefficient used in the calculation of the gradient
 // returns (-1)^m * (2n - 2m - 1)!!
 // assumes m <= n/2 and n >= 1
@@ -39,7 +39,7 @@ inline __host__ __device__ SCAL dyn_coeff13(int n, int m)
 	// for DIM > 3, see Shanker, Huang, 2007
 }
 
-inline __host__ __device__ SCAL dyn_coeff2(int n, int m)
+inline __forceinline__ __host__ __device__ SCAL dyn_coeff2(int n, int m)
 // a coefficient used in the calculation of the gradient
 // returns n! / (2^m * m! * (n - 2m)!)
 // assumes m <= n/2
@@ -182,71 +182,71 @@ In the following calculations we will use cartesian coordinates.
 
 */
 
-constexpr __host__ __device__ int symmetricelems3(int n)
+constexpr __forceinline__ __host__ __device__ int symmetricelems3(int n)
 {
 	return (n + 1) * (n + 2) / 2;
 }
 
-constexpr __host__ __device__ int tracelesselems3(int n)
+constexpr __forceinline__ __host__ __device__ int tracelesselems3(int n)
 {
 	return 2 * n + 1;
 }
 
-constexpr __host__ __device__ int symmetricoffset3(int p)
+constexpr __forceinline__ __host__ __device__ int symmetricoffset3(int p)
 {
 	return p * (p + 1) * (p + 2) / 6;
 }
 
-constexpr __host__ __device__ int tracelessoffset3(int p)
+constexpr __forceinline__ __host__ __device__ int tracelessoffset3(int p)
 {
 	return p * p;
 }
 
-inline __host__ __device__ int k_coeff(int index, int n)
+inline __forceinline__ __host__ __device__ int k_coeff(int index, int n)
 {
 	int b = 2*n+3;
 	return (b - sqrt(SCAL(b*b - 8*index))) / 2;
 }
 
-inline __host__ __device__ int symmetric_z_i(int i, int n)
+inline __forceinline__ __host__ __device__ int symmetric_z_i(int i, int n)
 {
 	return k_coeff(i, n);
 }
 
-constexpr __host__ __device__ int symmetric_x_i(int i, int n, int z)
+constexpr __forceinline__ __host__ __device__ int symmetric_x_i(int i, int n, int z)
 {
 	return (n * (n + 1) - (n - z) * (n - z + 1)) / 2 + n - i;
 }
-inline __host__ __device__ int symmetric_x_i(int i, int n)
+inline __forceinline__ __host__ __device__ int symmetric_x_i(int i, int n)
 {
 	return symmetric_x_i(i, n, symmetric_z_i(i, n));
 }
 
-constexpr __host__ __device__ int symmetric_i_x_z(int x, int z, int n)
+constexpr __forceinline__ __host__ __device__ int symmetric_i_x_z(int x, int z, int n)
 {
 	return (n * (n + 1) - (n - z) * (n - z + 1)) / 2 + n - x;
 }
 
-constexpr __host__ __device__ int traceless_z_i(int i, int n)
+constexpr __forceinline__ __host__ __device__ int traceless_z_i(int i, int n)
 {
 	return (i >= n+1); // i div (p + 1) = 1_{j | j >= p + 1} (i)
 }
 
-constexpr __host__ __device__ int traceless_x_i(int i, int n, int z)
+constexpr __forceinline__ __host__ __device__ int traceless_x_i(int i, int n, int z)
 {
 	return (z + 1) * n - i;
 }
-constexpr __host__ __device__ int traceless_x_i(int i, int n)
+constexpr __forceinline__ __host__ __device__ int traceless_x_i(int i, int n)
 {
 	return traceless_x_i(i, n, traceless_z_i(i, n));
 }
 
-constexpr __host__ __device__ int traceless_i_x_z(int x, int z, int n)
+constexpr __forceinline__ __host__ __device__ int traceless_i_x_z(int x, int z, int n)
 {
 	return (z + 1) * n - x;
 }
 
-constexpr __host__ __device__ SCAL traceless_A_x_z(const SCAL *A, int x, int z, int n)
+constexpr __forceinline__ __host__ __device__ SCAL traceless_A_x_z(const SCAL *A, int x, int z, int n)
 // extract element from traceless tensor A. It's valid also for z >= 2
 {
 	if (z >= 2)
@@ -1090,7 +1090,6 @@ inline __host__ __device__ void static_p2m_acc3(SCAL *M, int n, VEC d, SCAL q = 
 {
 	switch (n)
 	{
-#ifndef FAST_COMPILATION_
 		case 0:
 			static_p2m_acc3_<0>(M, d, q);
 			break;
@@ -1109,7 +1108,6 @@ inline __host__ __device__ void static_p2m_acc3(SCAL *M, int n, VEC d, SCAL q = 
 		case 5:
 			static_p2m_acc3_<5>(M, d, q);
 			break;
-#endif // FAST_COMPILATION_
 		default:
 			p2m_acc3(M, n, d, q);
 			break;
@@ -1387,13 +1385,6 @@ inline __device__ void m2l_acc_coalesced_tuple3(SCAL *__restrict__ Ltuple, SCAL 
 	{
 		if (no_dipole && mn == 1)
 			continue;
-		/*for (int m = mn+minm; m <= min(maxm, mn+maxn); ++m)
-		{
-			int n = n-mn;
-			SCAL C = inv_factorial(n)/scal;
-			contract_traceless_ma_coalesced3<b_atomic> // make tuple version
-				(Ltuple + tracelessoffset3(n), Mtuple + symmetricoffset3(mn), temp + symmetricoffset3(m), C, mn, m, tid, bdim);
-		}*/
 		contract_traceless_ma_coalesced_tuple3<b_atomic>
 			(Ltuple, temp, Mtuple + symmetricoffset3(mn), 1/scal, mn+minm, min(maxm, mn+maxn), mn, tid, bdim);
 		__syncwarp(mask);
@@ -1587,7 +1578,6 @@ inline __host__ __device__ void static_l2l_acc3(SCAL *__restrict__ Ltupleo, SCAL
 {
 	switch (nL)
 	{
-#ifndef FAST_COMPILATION_
 		case 0:
 			static_l2l_acc_3<minn, 0, traceless>(Ltupleo, temp, Ltuplei, d, r);
 			break;
@@ -1606,7 +1596,6 @@ inline __host__ __device__ void static_l2l_acc3(SCAL *__restrict__ Ltupleo, SCAL
 		case 5:
 			static_l2l_acc_3<minn, 5, traceless>(Ltupleo, temp, Ltuplei, d, r);
 			break;
-#endif // FAST_COMPILATION_
 		default:
 			for (int q = minn; q <= nL; ++q)
 				if constexpr (traceless)
@@ -1752,7 +1741,6 @@ inline __host__ __device__ VEC static_l2p_field3(SCAL *__restrict__ temp, const 
 {
 	switch (nL)
 	{
-#ifndef FAST_COMPILATION_
 		case 0:
 			return static_l2p_field_3<0, traceless>(temp, Ltuple, d, r);
 		case 1:
@@ -1765,7 +1753,6 @@ inline __host__ __device__ VEC static_l2p_field3(SCAL *__restrict__ temp, const 
 			return static_l2p_field_3<4, traceless>(temp, Ltuple, d, r);
 		case 5:
 			return static_l2p_field_3<5, traceless>(temp, Ltuple, d, r);
-#endif // FAST_COMPILATION_
 		default:
 			if constexpr (traceless)
 				return l2p_traceless_field3(temp, Ltuple, nL, d, r);
