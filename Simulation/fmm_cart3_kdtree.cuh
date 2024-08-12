@@ -30,63 +30,75 @@ struct fmmTree_kd
 	int p;
 };
 
-constexpr __device__ __host__ int kd_beg(int l)
-// return the position of the first element of the l-th level (starting from 0)
+__forceinline__ __device__ __host__
+constexpr int kd_beg(int l)
 {
+// return the position of the first element of the l-th level (starting from 0)
 	return (1 << l) - 1;
 }
-constexpr __device__ __host__ int kd_end(int l)
-// return the position after the last element of the l-th level (starting from 0)
+__forceinline__ __device__ __host__
+constexpr int kd_end(int l)
 {
+// return the position after the last element of the l-th level (starting from 0)
 	return kd_beg(l+1);
 }
-constexpr __device__ __host__ int kd_n(int l)
-// return the number of elements in the l-th level (starting from 0)
+__forceinline__ __device__ __host__
+constexpr int kd_n(int l)
 {
+// return the number of elements in the l-th level (starting from 0)
 	return 1 << l;
 }
-constexpr __device__ __host__ int kd_ntot(int L)
-// return the total number of nodes in a binary tree with maximum level L
+__forceinline__ __device__ __host__
+constexpr int kd_ntot(int L)
 {
+// return the total number of nodes in a binary tree with maximum level L
 	return (1 << (L+1)) - 1;
 }
-constexpr __device__ __host__ int kd_parent(int i)
+__forceinline__ __device__ __host__
+constexpr int kd_parent(int i)
+{
 // return the parent node index of node i
 // undefined for i = 0 (root node)
-{
 	return (i-1) >> 1;
 }
-constexpr __device__ __host__ int kd_lchild(int i)
-// return the left-child node index of node i
+__forceinline__ __device__ __host__
+constexpr int kd_lchild(int i)
 {
+// return the left-child node index of node i
 	return 2*i + 1;
 }
-constexpr __device__ __host__ int kd_rchild(int i)
-// return the right-child node index of node i
+__forceinline__ __device__ __host__
+constexpr int kd_rchild(int i)
 {
+// return the right-child node index of node i
 	return 2*i + 2;
 }
-constexpr __device__ __host__ bool kd_is_lchild(int i)
-// return true if i is a left-child node
+__forceinline__ __device__ __host__
+constexpr bool kd_is_lchild(int i)
 {
+// return true if i is a left-child node
 	return i != 0 && i == kd_lchild(kd_parent(i));
 }
-constexpr __device__ __host__ bool kd_is_rchild(int i)
-// return true if i is a right-child node
+__forceinline__ __device__ __host__
+constexpr bool kd_is_rchild(int i)
 {
+// return true if i is a right-child node
 	return i != 0 && i == kd_rchild(kd_parent(i));
 }
 
-inline __host__ __device__ SCAL& get_axis(VEC& v, int axis)
+__forceinline__ __host__ __device__
+inline SCAL& get_axis(VEC& v, int axis)
 {
 	return reinterpret_cast<SCAL*>(&v)[axis];
 }
-inline __host__ __device__ const SCAL& get_axis(const VEC& v, int axis)
+__forceinline__ __host__ __device__
+inline const SCAL& get_axis(const VEC& v, int axis)
 {
 	return reinterpret_cast<const SCAL*>(&v)[axis];
 }
 
-inline __host__ __device__ void evalRootBox_krnl(fmmTree_kd& tree, const ALIGNED_VEC *d_minmax)
+__host__ __device__
+inline void evalRootBox_krnl(fmmTree_kd& tree, const ALIGNED_VEC *d_minmax)
 {
 	VEC d = aligned_load(d_minmax[1]) - aligned_load(d_minmax[0]);
 	int arg = (d.x > d.y) ? ((d.x > d.z) ? 0 : 2) : ((d.y > d.z) ? 1 : 2);
@@ -96,7 +108,8 @@ inline __host__ __device__ void evalRootBox_krnl(fmmTree_kd& tree, const ALIGNED
 	tree.index[0] = 0;
 }
 
-__global__ void evalRootBox(fmmTree_kd tree, const ALIGNED_VEC *d_minmax)
+__global__
+void evalRootBox(fmmTree_kd tree, const ALIGNED_VEC *d_minmax)
 {
 	if (threadIdx.x == 0 && blockIdx.x == 0)
 		evalRootBox_krnl(tree, d_minmax);
@@ -107,9 +120,9 @@ void evalRootBox_cpu(fmmTree_kd& tree, const ALIGNED_VEC *d_minmax)
 }
 
 template <bool b_last>
-inline __host__ __device__ void evalBox_krnl(fmmTree_kd tree, const ALIGNED_VEC *p, int n, int l,
-                                             int begi, int endi, int stride) // l = 1 -> L
-{
+__host__ __device__
+inline void evalBox_krnl(fmmTree_kd tree, const ALIGNED_VEC *p, int n, int l, int begi, int endi, int stride)
+{ // l = 1 -> L
 	int m = kd_n(l);
 	int beg = kd_beg(l);
 	for (int i = begi; i < endi; i += stride)
@@ -137,7 +150,8 @@ inline __host__ __device__ void evalBox_krnl(fmmTree_kd tree, const ALIGNED_VEC 
 }
 
 template <bool b_last = false>
-__global__ void evalBox(fmmTree_kd tree, const ALIGNED_VEC *p, int n, int l)
+__global__
+void evalBox(fmmTree_kd tree, const ALIGNED_VEC *p, int n, int l)
 {
 	int m = kd_n(l);
 	evalBox_krnl<b_last>(tree, p, n, l, blockDim.x * blockIdx.x + threadIdx.x, m, gridDim.x * blockDim.x);
@@ -155,10 +169,11 @@ void evalBox_cpu(fmmTree_kd tree, const ALIGNED_VEC *p, int n, int l)
 		threads[i].join();
 }
 
-inline __device__ void evalKeys_kdtree_krnl(float *keys, const int *splitdim, const ALIGNED_VEC *p, int n,
+__device__
+inline void evalKeys_kdtree_krnl(float *keys, const int *splitdim, const ALIGNED_VEC *p, int n,
                                             int l, int begi, int endi, int stride)
-// calculate keys for all particles at level l
 {
+// calculate keys for all particles at level l
 	long long m = kd_n(l);
 	for (int i = begi; i < endi; i += stride)
 		keys[i] = (float)get_axis(aligned_load(p[i]), splitdim[m * i / n]);
@@ -166,8 +181,8 @@ inline __device__ void evalKeys_kdtree_krnl(float *keys, const int *splitdim, co
 
 inline void evalKeys_kdtree_cpu_krnl(unsigned long long *keys, const int *splitdim, const ALIGNED_VEC *p, long long n,
                                      int l, int precision, int begi, int endi, int stride)
-// calculate keys for all particles at level l
 {
+// calculate keys for all particles at level l
 	long long m = kd_n(l);
 	for (int i = begi; i < endi; i += stride)
 	{
@@ -228,11 +243,11 @@ void fmm_init3_kdtree_cpu(fmmTree_kd& tree, int L)
 		threads[i].join();
 }
 
-inline __host__ __device__ void fmm_multipoleLeaves3_kdtree_krnl(fmmTree_kd tree, const ALIGNED_VEC *p,
-                                                                 int begi, int endi, int stride)
+__host__ __device__
+inline void fmm_multipoleLeaves3_kdtree_krnl(fmmTree_kd tree, const ALIGNED_VEC *p, int begi, int endi, int stride)
+{
 // calculate multipoles for each cell
 // assumes all particles have the same charge/mass
-{
 	int off = symmetricoffset3(tree.p);
 	for (int i = begi; i < endi; i += stride)
 	{
@@ -250,7 +265,8 @@ inline __host__ __device__ void fmm_multipoleLeaves3_kdtree_krnl(fmmTree_kd tree
 	}
 }
 
-__global__ void fmm_multipoleLeaves3_kdtree(fmmTree_kd tree, const ALIGNED_VEC *p, int L)
+__global__
+void fmm_multipoleLeaves3_kdtree(fmmTree_kd tree, const ALIGNED_VEC *p, int L)
 {
 	int beg = kd_beg(L);
 	int end = kd_end(L);
@@ -269,10 +285,11 @@ void fmm_multipoleLeaves3_kdtree_cpu(fmmTree_kd tree, const ALIGNED_VEC *p, int 
 		threads[i].join();
 }
 
-inline __device__ void fmm_buildTree3_kdtree_krnl(fmmTree_kd tree, int begi, int endi, int stride) // L-1 -> 0
+__device__
+inline void fmm_buildTree3_kdtree_krnl(fmmTree_kd tree, int begi, int endi, int stride)
+{ // L-1 -> 0
 // build the l-th of cells after the deeper one (l+1)-th
 // "tree" contains only pointers to the actual tree in memory
-{
 	int off = symmetricoffset3(tree.p);
 	extern __shared__ SCAL smems[];
 	SCAL *smin = smems + 2*off*threadIdx.x;
@@ -326,10 +343,11 @@ inline __device__ void fmm_buildTree3_kdtree_krnl(fmmTree_kd tree, int begi, int
 	}
 }
 
-inline __host__ __device__ void fmm_buildTree3_kdtree2_krnl(fmmTree_kd tree, int begi, int endi, int stride) // L-1 -> 0
+__host__ __device__
+inline void fmm_buildTree3_kdtree2_krnl(fmmTree_kd tree, int begi, int endi, int stride)
+{ // L-1 -> 0
 // build the l-th of cells after the deeper one (l+1)-th
 // "tree" contains only pointers to the actual tree in memory
-{
 	int off = symmetricoffset3(tree.p);
 	int inds[2], mlts[2];
 	VEC centers[2];
@@ -374,13 +392,15 @@ inline __host__ __device__ void fmm_buildTree3_kdtree2_krnl(fmmTree_kd tree, int
 	}
 }
 
-__global__ void fmm_buildTree3_kdtree(fmmTree_kd tree, int l)
+__global__
+void fmm_buildTree3_kdtree(fmmTree_kd tree, int l)
 {
 	int beg = kd_beg(l);
 	int end = kd_end(l);
 	fmm_buildTree3_kdtree_krnl(tree, beg + blockDim.x * blockIdx.x + threadIdx.x, end, gridDim.x * blockDim.x);
 }
-__global__ void fmm_buildTree3_kdtree2(fmmTree_kd tree, int l)
+__global__
+void fmm_buildTree3_kdtree2(fmmTree_kd tree, int l)
 {
 	int beg = kd_beg(l);
 	int end = kd_end(l);
@@ -399,13 +419,15 @@ void fmm_buildTree3_kdtree_cpu(fmmTree_kd tree, int l)
 		threads[i].join();
 }
 
-inline __host__ __device__ SCAL kd_size(const VEC& l, const VEC& r)
+__host__ __device__
+inline SCAL kd_size(const VEC& l, const VEC& r)
 {
 	VEC diff = r - l;
 	return dot(diff, diff);
 }
 
-inline __host__ __device__ bool kd_admissible(const fmmTree_kd& tree, int n1, int n2, SCAL par)
+__host__ __device__
+inline bool kd_admissible(const fmmTree_kd& tree, int n1, int n2, SCAL par)
 {
 	VEC d = aligned_load(tree.center[n2]) - aligned_load(tree.center[n1]);
 	SCAL dist2 = dot(d, d);
@@ -434,10 +456,11 @@ __constant__ const int2 init_stack18[] = {
 };
 
 template <bool b_m2l_first = true>
-__global__ void fmm_dualTraversal(fmmTree_kd tree, int2 *p2p_list, int2 *m2l_list, int2 *stack, int *p2p_n, int *m2l_n,
-                                  int p2p_max, int m2l_max, int stack_max, SCAL r, int L)
-// call with CUDA gridsize = 1, 3, 7, 15 or 18
+__global__
+void fmm_dualTraversal(fmmTree_kd tree, int2 *p2p_list, int2 *m2l_list, int2 *stack, int *p2p_n, int *m2l_n,
+                       int p2p_max, int m2l_max, int stack_max, SCAL r, int L)
 {
+// call with CUDA gridsize = 1, 3, 7, 15 or 18
 	int tid = threadIdx.x;
 	int bid = blockIdx.x;
 	int bdim = blockDim.x;
@@ -619,10 +642,11 @@ void fmm_dualTraversal_cpu(const fmmTree_kd& tree, std::vector<int2>& p2p_list, 
 	}
 }
 
-inline __host__ __device__ void fmm_c2c3_kdtree_krnl(fmmTree_kd tree, const int2 *m2l_list, SCAL d_EPS2,
-                                                     int begi, int endi, int stride, SCAL *tempi)
-// cell to cell interaction
+__host__ __device__
+inline  void fmm_c2c3_kdtree_krnl(fmmTree_kd tree, const int2 *m2l_list, SCAL d_EPS2,
+                                  int begi, int endi, int stride, SCAL *tempi)
 {
+// cell to cell interaction
 	int offM = symmetricoffset3(tree.p);
 	int offL = tracelessoffset3(tree.p+1);
 	int offL2 = tracelessoffset3(tree.p-1);
@@ -689,9 +713,10 @@ inline __host__ __device__ void fmm_c2c3_kdtree_krnl(fmmTree_kd tree, const int2
 	}
 }
 
-__global__ void fmm_c2c3_kdtree2(fmmTree_kd tree, const int2 *m2l_list, const int *m2l_n, SCAL d_EPS2)
-// cell to cell interaction
+__global__
+void fmm_c2c3_kdtree2(fmmTree_kd tree, const int2 *m2l_list, const int *m2l_n, SCAL d_EPS2)
 {
+// cell to cell interaction
 	extern __shared__ SCAL smems[]; // (p+1)*(p+2)/2
 	int tid = threadIdx.x;
 	int bdim = blockDim.x;
@@ -722,9 +747,10 @@ __global__ void fmm_c2c3_kdtree2(fmmTree_kd tree, const int2 *m2l_list, const in
 	}
 }
 
-__global__ void fmm_c2c3_kdtree_coalesced(fmmTree_kd tree, const int2 *m2l_list, const int *m2l_n, SCAL d_EPS2)
-// cell to cell interaction
+__global__
+void fmm_c2c3_kdtree_coalesced(fmmTree_kd tree, const int2 *m2l_list, const int *m2l_n, SCAL d_EPS2)
 {
+// cell to cell interaction
 	int tempsize = symmetricoffset3(tree.p+1);
 	int offM = symmetricoffset3(tree.p);
 	int offL = tracelessoffset3(tree.p+1);
@@ -802,7 +828,8 @@ __global__ void fmm_c2c3_kdtree_coalesced(fmmTree_kd tree, const int2 *m2l_list,
 	}
 }
 
-__global__ void fmm_c2c3_kdtree(fmmTree_kd tree, const int2 *m2l_list, const int *m2l_n, SCAL d_EPS2)
+__global__
+void fmm_c2c3_kdtree(fmmTree_kd tree, const int2 *m2l_list, const int *m2l_n, SCAL d_EPS2)
 {
 	extern __shared__ SCAL smems[]; // size must be at least ((p+1)*(p+2)/2 + offM + offL)*blockDim.x
 	int tempsize = (tree.p+1)*(tree.p+2)/2;
@@ -827,9 +854,9 @@ void fmm_c2c3_kdtree_cpu(fmmTree_kd tree, const int2 *m2l_list, const int *m2l_n
 		delete[] temp[i];
 }
 
-inline __host__ __device__ void fmm_p2p_interaction(ALIGNED_VEC *__restrict__ a1, const ALIGNED_VEC *__restrict__ p1,
-                                                    const ALIGNED_VEC *__restrict__ p2,
-                                                    int mlt1, int mlt2, SCAL d_EPS2)
+__host__ __device__
+inline void fmm_p2p_interaction(ALIGNED_VEC *__restrict__ a1, const ALIGNED_VEC *__restrict__ p1,
+                                const ALIGNED_VEC *__restrict__ p2,  int mlt1, int mlt2, SCAL d_EPS2)
 {
 	for (int h = 0; h < mlt1; ++h)
 	{
@@ -858,11 +885,11 @@ inline __host__ __device__ void fmm_p2p_interaction(ALIGNED_VEC *__restrict__ a1
 	}
 }
 
-inline __host__ __device__ void fmm_p2p3_kdtree_krnl(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tree, const ALIGNED_VEC *__restrict__ p,
-                                                     const int2 *p2p_list, int mlt_max, SCAL d_EPS2,
-                                                     int begi, int endi, int stride)
-// particle to particle interaction
+__host__ __device__
+inline void fmm_p2p3_kdtree_krnl(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tree, const ALIGNED_VEC *__restrict__ p,
+                                 const int2 *p2p_list, int mlt_max, SCAL d_EPS2, int begi, int endi, int stride)
 {
+// particle to particle interaction
 #ifdef __CUDA_ARCH__
 	extern __shared__ ALIGNED_VEC smem[];
 	if (mlt_max % 2 == 0)
@@ -935,10 +962,11 @@ inline __host__ __device__ void fmm_p2p3_kdtree_krnl(ALIGNED_VEC *__restrict__ a
 #endif
 }
 
-__global__ void fmm_p2p3_kdtree_coalesced(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tree, const ALIGNED_VEC *__restrict__ p,
-                                          const int2 *p2p_list, const int *p2p_n, int mlt_max, SCAL d_EPS2)
-// particle to particle interaction
+__global__
+void fmm_p2p3_kdtree_coalesced(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tree, const ALIGNED_VEC *__restrict__ p,
+                               const int2 *p2p_list, const int *p2p_n, int mlt_max, SCAL d_EPS2)
 {
+// particle to particle interaction
 	extern __shared__ ALIGNED_VEC smem[];
 	int tid = threadIdx.x;
 	int wdim = min(bitceil(mlt_max), 32u);
@@ -990,8 +1018,6 @@ __global__ void fmm_p2p3_kdtree_coalesced(ALIGNED_VEC *__restrict__ a, const fmm
 		for (int g = lid; g < mlt2; g += wdim)
 			sa2[g] = ALIGNED_VEC{};
 
-		__syncwarp(loop_mask);
-
 		unsigned mask = __ballot_sync(loop_mask, lid < mlt1);
 		for (int h = lid; h < mlt1; h += wdim)
 		{
@@ -1027,10 +1053,11 @@ __global__ void fmm_p2p3_kdtree_coalesced(ALIGNED_VEC *__restrict__ a, const fmm
 	}
 }
 
-__global__ void fmm_p2p3_kdtree_coalesced2(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tree, const ALIGNED_VEC *__restrict__ p,
-                                           const int2 *p2p_list, const int *p2p_n, int mlt_max, SCAL d_EPS2)
-// particle to particle interaction
+__global__
+void fmm_p2p3_kdtree_coalesced2(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tree, const ALIGNED_VEC *__restrict__ p,
+                                const int2 *p2p_list, const int *p2p_n, int mlt_max, SCAL d_EPS2)
 {
+// particle to particle interaction
 	extern __shared__ ALIGNED_VEC smem[]; // 2*mlt_max*sizeof(ALIGNED_VEC)
 	int tid = threadIdx.x;
 	int bdim = blockDim.x;
@@ -1096,8 +1123,110 @@ __global__ void fmm_p2p3_kdtree_coalesced2(ALIGNED_VEC *__restrict__ a, const fm
 	}
 }
 
-__global__ void fmm_p2p3_kdtree(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tree, const ALIGNED_VEC *__restrict__ p,
-                                const int2 *p2p_list, const int *p2p_n, int mlt_max, SCAL d_EPS2)
+__global__
+void fmm_p2p3_kdtree_shuffle(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tree, const ALIGNED_VEC *__restrict__ p,
+                             const int2 *p2p_list, const int *p2p_n, int mlt_max, SCAL d_EPS2)
+{
+// particle to particle interaction
+	extern __shared__ ALIGNED_VEC smem[];
+	int wdim = bitceil(mlt_max);
+	assert(wdim <= 32);
+	int tid = threadIdx.x;
+	int wid = tid/wdim; // (sub)warp id
+	int lid = tid%wdim; // lane id
+	int bdim = blockDim.x;
+	int nwarps = bdim/wdim;
+	int bid = blockIdx.x;
+	int gdim = gridDim.x;
+	int stride = gdim*nwarps;
+
+	int beg = bid*nwarps+wid;
+	int end = *p2p_n;
+	unsigned loop_mask = __ballot_sync(0xFFFFFFFF, beg < end);
+
+	for (int i = beg; i < end; i += stride)
+	{
+		int n1 = p2p_list[i].x;
+		int n2 = p2p_list[i].y;
+		int mlt1 = tree.mult[n1];
+		int mlt2 = tree.mult[n2];
+		if (mlt1 > mlt2)
+		{
+			swap(n1, n2);
+			swap(mlt1, mlt2);
+		}
+		// assume mlt2 > mlt1
+
+		int ind1 = tree.index[n1];
+		int ind2 = tree.index[n2];
+		const ALIGNED_VEC *p1 = p + ind1;
+		const ALIGNED_VEC *p2 = p + ind2;
+		ALIGNED_VEC *a1 = a + ind1;
+		ALIGNED_VEC *a2 = a + ind2;
+		int gg = lid+1;
+		gg = (gg == mlt2) ? 0 : gg;
+		SCAL fmask = (lid == mlt1) ? 0 : 1;
+
+		VEC a2g{};
+
+		unsigned mask = __ballot_sync(loop_mask, lid < mlt2);
+		if (lid < mlt2)
+		{
+			VEC atmp{}, p1h, p2g = aligned_load(p2[lid]);
+			if (lid < mlt1)
+				p1h = aligned_load(p1[lid]);
+
+			VEC d = p1h - p2g;
+			SCAL k = dot(d, d) + d_EPS2;
+			k = (1/k)*reciprocal_sqrt(k);
+			d *= k*fmask;
+
+			atmp += d;
+			a2g -= d;
+
+			mask = __ballot_sync(mask, 1 < mlt2);
+			for (int g = 1; g < mlt2; ++g)
+			{
+				p2g.x = __shfl_sync(mask, p2g.x, gg, wdim);
+				p2g.y = __shfl_sync(mask, p2g.y, gg, wdim);
+				p2g.z = __shfl_sync(mask, p2g.z, gg, wdim);
+
+				d = p1h - p2g;
+				k = dot(d, d) + d_EPS2;
+				k = (1/k)*reciprocal_sqrt(k);
+				d *= k*fmask;
+
+				atmp += d;
+				a2g.x = __shfl_sync(mask, a2g.x, gg, wdim) - d.x;
+				a2g.y = __shfl_sync(mask, a2g.y, gg, wdim) - d.y;
+				a2g.z = __shfl_sync(mask, a2g.z, gg, wdim) - d.z;
+
+				mask = __ballot_sync(mask, g+1 < mlt2);
+			}
+			if (lid < mlt1)
+			{
+				myAtomicAdd(&a1[lid].x, atmp.x);
+				myAtomicAdd(&a1[lid].y, atmp.y);
+				myAtomicAdd(&a1[lid].z, atmp.z);
+			}
+		}
+		__syncwarp(loop_mask);
+
+		gg = lid-1;
+		gg = (gg == -1) ? mlt2-1 : gg;
+		if (lid < mlt2)
+		{
+			myAtomicAdd(&a2[gg].x, a2g.x);
+			myAtomicAdd(&a2[gg].y, a2g.y);
+			myAtomicAdd(&a2[gg].z, a2g.z);
+		}
+		loop_mask = __ballot_sync(loop_mask, i+stride < end);
+	}
+}
+
+__global__
+void fmm_p2p3_kdtree(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tree, const ALIGNED_VEC *__restrict__ p,
+                     const int2 *p2p_list, const int *p2p_n, int mlt_max, SCAL d_EPS2)
 {
 	fmm_p2p3_kdtree_krnl(a, tree, p, p2p_list, mlt_max, d_EPS2, blockDim.x * blockIdx.x + threadIdx.x, *p2p_n, gridDim.x * blockDim.x);
 }
@@ -1113,11 +1242,11 @@ void fmm_p2p3_kdtree_cpu(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tree, con
 		threads[i].join();
 }
 
-inline __host__ __device__ void fmm_p2p3_self_kdtree_krnl(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tree, const ALIGNED_VEC *__restrict__ p,
-                                                          int mlt_max, SCAL d_EPS2,
-                                                          int begi, int endi, int stride)
-// particle to particle interaction
+__host__ __device__
+inline void fmm_p2p3_self_kdtree_krnl(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tree, const ALIGNED_VEC *__restrict__ p,
+                                      int mlt_max, SCAL d_EPS2, int begi, int endi, int stride)
 {
+// particle to particle interaction
 #ifdef __CUDA_ARCH__
 	extern __shared__ ALIGNED_VEC smem[];
 	if (mlt_max % 2 == 0)
@@ -1138,10 +1267,12 @@ inline __host__ __device__ void fmm_p2p3_self_kdtree_krnl(ALIGNED_VEC *__restric
 #endif
 	}
 }
-__global__ void fmm_p2p3_self_kdtree_coalesced(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tree, const ALIGNED_VEC *__restrict__ p,
-                                               int L, int mlt_max, SCAL d_EPS2)
-// particle to particle interaction
+
+__global__
+void fmm_p2p3_self_kdtree_coalesced(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tree, const ALIGNED_VEC *__restrict__ p,
+                                    int L, int mlt_max, SCAL d_EPS2)
 {
+// particle to particle interaction
 	extern __shared__ ALIGNED_VEC sp[]; // mlt_max*sizeof(ALIGNED_VEC)
 	int tid = threadIdx.x;
 	int bdim = blockDim.x;
@@ -1180,8 +1311,9 @@ __global__ void fmm_p2p3_self_kdtree_coalesced(ALIGNED_VEC *__restrict__ a, cons
 	}
 }
 
-__global__ void fmm_p2p3_self_kdtree(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tree, const ALIGNED_VEC *__restrict__ p,
-                                     int L, int mlt_max, SCAL d_EPS2)
+__global__
+void fmm_p2p3_self_kdtree(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tree, const ALIGNED_VEC *__restrict__ p,
+                          int L, int mlt_max, SCAL d_EPS2)
 {
 	int beg = kd_beg(L);
 	int end = kd_end(L);
@@ -1201,9 +1333,10 @@ void fmm_p2p3_self_kdtree_cpu(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tree
 		threads[i].join();
 }
 
-inline __device__ void fmm_pushl3_kdtree_krnl(fmmTree_kd tree, int begi, int endi, int stride, SCAL *tempi) // 0 -> L-1
+__device__
+inline void fmm_pushl3_kdtree_krnl(fmmTree_kd tree, int begi, int endi, int stride, SCAL *tempi)
+{ // 0 -> L-1
 // push informations about the field from l-th level to (l+1)-th level
-{
 	int off = tracelessoffset3(tree.p+1);
 	SCAL *slin = tempi + tree.p*(tree.p+1)/2;
 	SCAL *slout = slin + symmetricoffset3(tree.p+1);
@@ -1238,9 +1371,10 @@ inline __device__ void fmm_pushl3_kdtree_krnl(fmmTree_kd tree, int begi, int end
 	}
 }
 
-inline __host__ __device__ void fmm_pushl3_kdtree2_krnl(fmmTree_kd tree, int begi, int endi, int stride, SCAL *tempi) // 0 -> L-1
+__host__ __device__ 
+inline void fmm_pushl3_kdtree2_krnl(fmmTree_kd tree, int begi, int endi, int stride, SCAL *tempi)
+{ // 0 -> L-1
 // push informations about the field from l-th level to (l+1)-th level
-{
 	int off = tracelessoffset3(tree.p+1);
 	int inds[2];
 	for (int ijk = begi; ijk < endi; ijk += stride)
@@ -1263,14 +1397,16 @@ inline __host__ __device__ void fmm_pushl3_kdtree2_krnl(fmmTree_kd tree, int beg
 	}
 }
 
-__global__ void fmm_pushl3_kdtree(fmmTree_kd tree, int l)
+__global__
+void fmm_pushl3_kdtree(fmmTree_kd tree, int l)
 {
 	extern __shared__ SCAL temp[];
 	SCAL *tempi = temp + (tree.p*(tree.p+1)/2 + symmetricoffset3(tree.p+1) + tracelessoffset3(tree.p+1))*threadIdx.x;
 	int beg = kd_beg(l), end = kd_end(l);
 	fmm_pushl3_kdtree_krnl(tree, beg + blockDim.x * blockIdx.x + threadIdx.x, end, gridDim.x * blockDim.x, tempi);
 }
-__global__ void fmm_pushl3_kdtree2(fmmTree_kd tree, int l)
+__global__
+void fmm_pushl3_kdtree2(fmmTree_kd tree, int l)
 {
 	extern __shared__ SCAL temp[];
 	SCAL *tempi = temp + (2*tree.p-1)*threadIdx.x;
@@ -1294,10 +1430,11 @@ void fmm_pushl3_kdtree_cpu(fmmTree_kd tree, int l)
 		delete[] temp[i];
 }
 
-inline __device__ void fmm_pushLeaves3_kdtree_krnl(ALIGNED_VEC *__restrict__ a, const ALIGNED_VEC *__restrict__ p,
-                                                   fmmTree_kd tree, int begi, int endi, int stride, SCAL *tempi)
-// push informations about the field from leaves to individual particles
+__device__
+inline void fmm_pushLeaves3_kdtree_krnl(ALIGNED_VEC * a, const ALIGNED_VEC * p,
+                                        fmmTree_kd tree, int begi, int endi, int stride, SCAL *tempi)
 {
+// push informations about the field from leaves to individual particles
 	SCAL *slin = tempi + tree.p*(tree.p+1)/2+3;
 	int off = tracelessoffset3(tree.p+1);
 	for (int i = begi; i < endi; i += stride)
@@ -1323,10 +1460,11 @@ inline __device__ void fmm_pushLeaves3_kdtree_krnl(ALIGNED_VEC *__restrict__ a, 
 	}
 }
 
-inline __host__ __device__ void fmm_pushLeaves3_kdtree2_krnl(ALIGNED_VEC *__restrict__ a, const ALIGNED_VEC *__restrict__ p,
-                                                             fmmTree_kd tree, int begi, int endi, int stride, SCAL *tempi)
-// push informations about the field from leaves to individual particles
+__host__ __device__
+inline void fmm_pushLeaves3_kdtree2_krnl(ALIGNED_VEC *__restrict__ a, const ALIGNED_VEC *__restrict__ p,
+                                         fmmTree_kd tree, int begi, int endi, int stride, SCAL *tempi)
 {
+// push informations about the field from leaves to individual particles
 	int off = tracelessoffset3(tree.p+1);
 	for (int i = begi; i < endi; i += stride)
 	{
@@ -1346,7 +1484,8 @@ inline __host__ __device__ void fmm_pushLeaves3_kdtree2_krnl(ALIGNED_VEC *__rest
 	}
 }
 
-__global__ void fmm_pushLeaves3_kdtree(ALIGNED_VEC *a, const ALIGNED_VEC *p, fmmTree_kd tree, int L)
+__global__
+void fmm_pushLeaves3_kdtree(ALIGNED_VEC *a, const ALIGNED_VEC *p, fmmTree_kd tree, int L)
 {
 	extern __shared__ SCAL temp[];
 	SCAL *tempi = temp + (tree.p*(tree.p+1)/2+3 + symmetricoffset3(tree.p+1))*threadIdx.x;
@@ -1354,7 +1493,8 @@ __global__ void fmm_pushLeaves3_kdtree(ALIGNED_VEC *a, const ALIGNED_VEC *p, fmm
 	int end = kd_end(L);
 	fmm_pushLeaves3_kdtree_krnl(a, p, tree, beg + blockDim.x * blockIdx.x + threadIdx.x, end, gridDim.x * blockDim.x, tempi);
 }
-__global__ void fmm_pushLeaves3_kdtree2(ALIGNED_VEC *a, const ALIGNED_VEC *p, fmmTree_kd tree, int L)
+__global__
+void fmm_pushLeaves3_kdtree2(ALIGNED_VEC *a, const ALIGNED_VEC *p, fmmTree_kd tree, int L)
 {
 	extern __shared__ SCAL temp[]; // size must be at least (2*order+2)*blockDim.x
 	SCAL *tempi = temp + (2*tree.p+2)*threadIdx.x;
@@ -1454,7 +1594,8 @@ void sort_particle_cpu(ALIGNED_VEC *__restrict__ p, char *__restrict__ c_tmp, in
 	copy_cpu(unsort, (int*)c_tmp, n);
 }
 
-inline __host__ __device__ int buildTree_smem(int blocksize)
+__host__ __device__
+inline int buildTree_smem(int blocksize)
 {
 #ifdef __CUDA_ARCH__
 	return 2*symmetricoffset3(::m_fmm_order)*blocksize*sizeof(SCAL);
@@ -1462,7 +1603,8 @@ inline __host__ __device__ int buildTree_smem(int blocksize)
 	return 2*symmetricoffset3(::fmm_order)*blocksize*sizeof(SCAL);
 #endif
 }
-inline __host__ __device__ int p2p0_smem(int blocksize)
+__host__ __device__
+inline int p2p0_smem(int blocksize)
 {
 #ifdef __CUDA_ARCH__
 	int mlt_max = ::m_mlt_max;
@@ -1473,7 +1615,8 @@ inline __host__ __device__ int p2p0_smem(int blocksize)
 		++mlt_max; // to reduce bank conflicts
 	return 2*mlt_max*blocksize*sizeof(ALIGNED_VEC);
 }
-inline __host__ __device__ int p2p1_smem(int blocksize)
+__host__ __device__
+inline int p2p1_smem(int blocksize)
 {
 #ifdef __CUDA_ARCH__
 	int mlt_max = ::m_mlt_max;
@@ -1486,7 +1629,8 @@ inline __host__ __device__ int p2p1_smem(int blocksize)
 		++mlt_max; // to reduce bank conflicts
 	return 2*mlt_max*nwarps*sizeof(ALIGNED_VEC);
 }
-inline __host__ __device__ int p2p_self_smem(int blocksize)
+__host__ __device__
+inline int p2p_self_smem(int blocksize)
 {
 #ifdef __CUDA_ARCH__
 	int mlt_max = ::m_mlt_max;
@@ -1497,7 +1641,8 @@ inline __host__ __device__ int p2p_self_smem(int blocksize)
 		++mlt_max; // to reduce bank conflicts
 	return mlt_max*blocksize*sizeof(ALIGNED_VEC);
 }
-inline __host__ __device__ int c2c0_smem(int blocksize)
+__host__ __device__
+inline int c2c0_smem(int blocksize)
 {
 #ifdef __CUDA_ARCH__
 	int order = ::m_fmm_order;
@@ -1516,7 +1661,8 @@ inline __host__ __device__ int c2c0_smem(int blocksize)
 		++offL; // to reduce bank conflicts
 	return (tempsize + offM + offL)*blocksize*sizeof(SCAL);
 }
-inline __host__ __device__ int c2c1_smem(int blocksize)
+__host__ __device__
+inline int c2c1_smem(int blocksize)
 {
 #ifdef __CUDA_ARCH__
 	int order = ::m_fmm_order;
@@ -1538,7 +1684,8 @@ inline __host__ __device__ int c2c1_smem(int blocksize)
 		++offL; // to reduce bank conflicts
 	return (tempsize + offM + offL)*nwarps*sizeof(SCAL);
 }
-inline __host__ __device__ int c2c2_smem(int blocksize)
+__host__ __device__
+inline int c2c2_smem(int blocksize)
 {
 #ifdef __CUDA_ARCH__
 	return (::m_fmm_order+1)*(::m_fmm_order+2)/2*blocksize*sizeof(SCAL);
@@ -1546,7 +1693,8 @@ inline __host__ __device__ int c2c2_smem(int blocksize)
 	return (::fmm_order+1)*(::fmm_order+2)/2*blocksize*sizeof(SCAL);
 #endif
 }
-inline __host__ __device__ int pushl_smem(int blocksize)
+__host__ __device__
+inline int pushl_smem(int blocksize)
 {
 #ifdef __CUDA_ARCH__
 	return (::m_fmm_order*(::m_fmm_order+1)/2 + symmetricoffset3(::m_fmm_order+1) + tracelessoffset3(::m_fmm_order+1))*blocksize*sizeof(SCAL);
@@ -1554,7 +1702,8 @@ inline __host__ __device__ int pushl_smem(int blocksize)
 	return (::fmm_order*(::fmm_order+1)/2 + symmetricoffset3(::fmm_order+1) + tracelessoffset3(::fmm_order+1))*blocksize*sizeof(SCAL);
 #endif
 }
-inline __host__ __device__ int pushl2_smem(int blocksize)
+__host__ __device__
+inline int pushl2_smem(int blocksize)
 {
 #ifdef __CUDA_ARCH__
 	return (2*::m_fmm_order-1)*blocksize*sizeof(SCAL);
@@ -1562,7 +1711,8 @@ inline __host__ __device__ int pushl2_smem(int blocksize)
 	return (2*::fmm_order-1)*blocksize*sizeof(SCAL);
 #endif
 }
-inline __host__ __device__ int pushLeaves_smem(int blocksize)
+__host__ __device__
+int pushLeaves_smem(int blocksize)
 {
 #ifdef __CUDA_ARCH__
 	return (::m_fmm_order*(::m_fmm_order+1)/2+3 + symmetricoffset3(::m_fmm_order+1))*blocksize*sizeof(SCAL);
@@ -1570,7 +1720,8 @@ inline __host__ __device__ int pushLeaves_smem(int blocksize)
 	return (::fmm_order*(::fmm_order+1)/2+3 + symmetricoffset3(::fmm_order+1))*blocksize*sizeof(SCAL);
 #endif
 }
-inline __host__ __device__ int pushLeaves2_smem(int blocksize)
+__host__ __device__
+inline int pushLeaves2_smem(int blocksize)
 {
 #ifdef __CUDA_ARCH__
 	return (2*::m_fmm_order+2)*blocksize*sizeof(SCAL);
@@ -1597,7 +1748,7 @@ void fmm_cart3_kdtree(ALIGNED_VEC *p, ALIGNED_VEC *a, int n, const SCAL* param)
 	static int p2p_max = 0, m2l_max = 0, stack_max = 0, ntot = 0;
 	static int2 evalKeys_bt, evalIndices_bt, evalBox_bt, multLeaves_bt,
 		centerLeaves_bt, multipoleLeaves_bt, buildTree_bt, buildTree2_bt,
-		rescale_bt, p2p0_bt, p2p1_bt, p2p2_bt, p2p_self_bt, p2p_self2_bt,
+		rescale_bt, p2p0_bt, p2p1_bt, p2p2_bt, p2p3_bt, p2p_self_bt, p2p_self2_bt,
 		c2c0_bt, c2c1_bt, c2c2_bt, pushl_bt, pushl2_bt,
 		pushLeaves_bt, pushLeaves2_bt, gather_bt, copy_bt;
 
@@ -1644,6 +1795,7 @@ void fmm_cart3_kdtree(ALIGNED_VEC *p, ALIGNED_VEC *a, int n, const SCAL* param)
 				gpuErrchk(cudaOccupancyMaxPotentialBlockSize(&centerLeaves_bt.x, &centerLeaves_bt.y, centerLeaves));
 				gpuErrchk(cudaOccupancyMaxPotentialBlockSize(&multipoleLeaves_bt.x, &multipoleLeaves_bt.y, fmm_multipoleLeaves3_kdtree));
 				gpuErrchk(cudaOccupancyMaxPotentialBlockSize(&buildTree2_bt.x, &buildTree2_bt.y, fmm_buildTree3_kdtree2));
+				gpuErrchk(cudaOccupancyMaxPotentialBlockSize(&p2p3_bt.x, &p2p3_bt.y, fmm_p2p3_kdtree_shuffle));
 				gpuErrchk(cudaOccupancyMaxPotentialBlockSize(&rescale_bt.x, &rescale_bt.y, rescale));
 				gpuErrchk(cudaOccupancyMaxPotentialBlockSize(&gather_bt.x, &gather_bt.y, gather_inverse_krnl<ALIGNED_VEC>));
 				gpuErrchk(cudaOccupancyMaxPotentialBlockSize(&copy_bt.x, &copy_bt.y, copy_krnl<ALIGNED_VEC>));
@@ -1777,8 +1929,6 @@ void fmm_cart3_kdtree(ALIGNED_VEC *p, ALIGNED_VEC *a, int n, const SCAL* param)
 
 	if (coll)
 	{
-		int bsize = clamp(::h_mlt_max/32*32, 32, 1024);
-
 		if (::h_mlt_max >= 4)
 		{
 			smemSize = p2p1_smem(p2p1_bt.y);
@@ -1804,7 +1954,12 @@ void fmm_cart3_kdtree(ALIGNED_VEC *p, ALIGNED_VEC *a, int n, const SCAL* param)
 		}
 	}
 
-	if (symmetricoffset3(order) >= 64)
+	if (true)
+	{
+		smemSize = c2c1_smem(c2c1_bt.y);
+		fmm_c2c3_kdtree_coalesced <<< c2c1_bt.x, c2c1_bt.y, smemSize >>> (tree, d_m2l_list, d_m2l_n, EPS2);
+	}
+	else if (symmetricoffset3(order) >= 64)
 	{
 		smemSize = c2c2_smem(c2c2_bt.y);
 		fmm_c2c3_kdtree2 <<< c2c2_bt.x, c2c2_bt.y, smemSize >>> (tree, d_m2l_list, d_m2l_n, EPS2);

@@ -33,8 +33,8 @@ void symplectic_euler(void(*f)(ALIGNED_VEC*, ALIGNED_VEC*, int, const SCAL*), SC
                       const SCAL* param, long double dt,
                       void(*step_func)(ALIGNED_VEC*, const ALIGNED_VEC*, SCAL, int) = step,
                       long double scale = 1)
-// 1st order
 {
+// 1st order
 	ParticleSystem d_p = { (ALIGNED_VEC*)d_buf, ((ALIGNED_VEC*)d_buf) + n, ((ALIGNED_VEC*)d_buf) + 2 * n };
 
 	// v += a * dt
@@ -51,8 +51,8 @@ void pre_symplectic_euler(void(*f)(ALIGNED_VEC*, ALIGNED_VEC*, int, const SCAL*)
                           const SCAL* param, long double dt,
                           void(*step_func)(ALIGNED_VEC*, const ALIGNED_VEC*, SCAL, int) = step,
                           long double scale = 1)
-// 1st order
 {
+// 1st order
 	ParticleSystem d_p = { (ALIGNED_VEC*)d_buf, ((ALIGNED_VEC*)d_buf) + n, ((ALIGNED_VEC*)d_buf) + 2 * n };
 
 	// a = f(x)
@@ -74,8 +74,8 @@ void leapfrog(
 	void(*step_func)(ALIGNED_VEC*, const ALIGNED_VEC*, SCAL, int) = step, // pointer to function for step (multiply/addition)
 	long double scale = 1                                                 // quantity that rescales the field f(x)
 )
-// 2nd order
 {
+// 2nd order
 	ParticleSystem d_p = { (ALIGNED_VEC*)d_buf, // positions
 	                      ((ALIGNED_VEC*)d_buf) + n, // velocities
 	                      ((ALIGNED_VEC*)d_buf) + 2 * n // accelerations
@@ -100,9 +100,9 @@ constexpr long double fr_par = 1.3512071919596576340476878089715L; // 1 / (2 - c
 void forestruth(void(*f)(ALIGNED_VEC*, ALIGNED_VEC*, int, const SCAL*), SCAL *d_buf, int n,
 				const SCAL* param, long double dt, void(*step_func)(ALIGNED_VEC*, const ALIGNED_VEC*, SCAL, int) = step,
 				long double scale = 1)
+{
 // Forest-Ruth method
 // 4th order
-{
 	ParticleSystem d_p = { (ALIGNED_VEC*)d_buf, // positions
 	                      ((ALIGNED_VEC*)d_buf) + n, // velocities
 	                      ((ALIGNED_VEC*)d_buf) + 2 * n // accelerations
@@ -134,9 +134,9 @@ constexpr long double pefrl_parc = -0.6626458266981849E-01L;
 void pefrl(void(*f)(ALIGNED_VEC*, ALIGNED_VEC*, int, const SCAL*), SCAL *d_buf, int n,
 				const SCAL* param, long double dt, void(*step_func)(ALIGNED_VEC*, const ALIGNED_VEC*, SCAL, int) = step,
 				long double scale = 1)
+{
 // Position-extended Forest-Ruth-like method
 // 4th order, slower but more accurate
-{
 	ParticleSystem d_p = { (ALIGNED_VEC*)d_buf, // positions
 	                      ((ALIGNED_VEC*)d_buf) + n, // velocities
 	                      ((ALIGNED_VEC*)d_buf) + 2 * n // accelerations

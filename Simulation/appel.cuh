@@ -30,9 +30,10 @@ struct Tree
 // "index" will be the index of the first element that belongs to the node
 // Sorting the particle array will be needed in order to avoid slow random access.
 
-__global__ void printp(const ALIGNED_VEC *p, int n)
-// print positions of all particles, for debug purposes
+__global__
+void printp(const ALIGNED_VEC *p, int n)
 {
+// print positions of all particles, for debug purposes
 	for (int i = blockDim.x * blockIdx.x + threadIdx.x;
 	     i < n;
 	     i += gridDim.x * blockDim.x)
@@ -41,10 +42,11 @@ __global__ void printp(const ALIGNED_VEC *p, int n)
 	}
 }
 
-inline __host__ __device__ void evalKeys_krnl(int *keys, const ALIGNED_VEC *p, const ALIGNED_VEC *min, SCAL rdelta, int side,
-                                              int begi, int endi, int stride)
-// put particle i in box keys[i]
+__host__ __device__
+inline void evalKeys_krnl(int *keys, const ALIGNED_VEC *p, const ALIGNED_VEC *min, SCAL rdelta, int side,
+                          int begi, int endi, int stride)
 {
+// put particle i in box keys[i]
 	for (int i = begi; i < endi; i += stride)
 	{
 		IVEC iD = to_ivec((aligned_load(p[i]) - aligned_load(min[0])) * rdelta);
@@ -54,7 +56,8 @@ inline __host__ __device__ void evalKeys_krnl(int *keys, const ALIGNED_VEC *p, c
 	}
 }
 
-__global__ void evalKeys(int *keys, const ALIGNED_VEC *p, const ALIGNED_VEC *min, int n, SCAL rdelta, int side)
+__global__
+void evalKeys(int *keys, const ALIGNED_VEC *p, const ALIGNED_VEC *min, int n, SCAL rdelta, int side)
 {
 	evalKeys_krnl(keys, p, min, rdelta, side, blockDim.x * blockIdx.x + threadIdx.x, n, gridDim.x * blockDim.x);
 }
@@ -69,15 +72,17 @@ void evalKeys_cpu(int *keys, const ALIGNED_VEC *p, const ALIGNED_VEC *min, int n
 		threads[i].join();
 }
 
-inline __host__ __device__ void evalIndices_krnl(int *ind, int begi, int endi, int stride)
+__host__ __device__
+inline void evalIndices_krnl(int *ind, int begi, int endi, int stride)
+{
 // will be used to know the index after the particles are sorted,
 // so that also p, v, a can be sorted accordingly
-{
 	for (int i = begi; i < endi; i += stride)
 		ind[i] = i;
 }
 
-__global__ void evalIndices(int *ind, int n)
+__global__
+void evalIndices(int *ind, int n)
 {
 	evalIndices_krnl(ind, blockDim.x * blockIdx.x + threadIdx.x, n, gridDim.x * blockDim.x);
 }
@@ -93,9 +98,10 @@ void evalIndices_cpu(int *ind, int n)
 }
 
 template <typename T>
-__global__ void check_krnl(const T *keys, int n)
-// check that particles are sorted correctly, for debug purposes
+__global__
+void check_krnl(const T *keys, int n)
 {
+// check that particles are sorted correctly, for debug purposes
     for (int i = blockDim.x * blockIdx.x + threadIdx.x;
 	     i < n-1;
 	     i += gridDim.x * blockDim.x)
@@ -107,28 +113,33 @@ __global__ void check_krnl(const T *keys, int n)
 	}
 }
 
-inline __device__ __host__ int tree_beg(int l)
-// return the position of the first element of the l-th level
+__device__ __host__
+inline int tree_beg(int l)
 {
+// return the position of the first element of the l-th level
 	return ((1 << (l*DIM)) - 1) / ((1 << DIM) - 1);
 }
-inline __device__ __host__ int tree_end(int l)
-// return the position after the last element of the l-th level
+__device__ __host__
+inline int tree_end(int l)
 {
+// return the position after the last element of the l-th level
 	return ((1 << ((l+1)*DIM)) - 1) / ((1 << DIM) - 1);
 }
-inline __device__ __host__ int tree_n(int l)
-// return the number of elements in the l-th level
+__device__ __host__
+inline int tree_n(int l)
 {
+// return the number of elements in the l-th level
 	return 1 << (l*DIM);
 }
-inline __device__ __host__ int tree_side(int l)
-// return the side size of the l-th level (square root of n when DIM=2, cube root of n when DIM=3)
+__device__ __host__
+inline int tree_side(int l)
 {
+// return the side size of the l-th level (square root of n when DIM=2, cube root of n when DIM=3)
 	return 1 << l;
 }
 
-__global__ void initLeaves(ALIGNED_VEC *center, int m)
+__global__
+void initLeaves(ALIGNED_VEC *center, int m)
 {
 	for (int i = blockDim.x * blockIdx.x + threadIdx.x;
 	     i < m;
@@ -138,14 +149,15 @@ __global__ void initLeaves(ALIGNED_VEC *center, int m)
 	}
 }
 
-inline __host__ __device__ void indexLeaves_krnl(int *__restrict__ index, const int *__restrict__ keys,
-                                                 int m, int n, int begi, int endi, int stride)
+__host__ __device__
+inline void indexLeaves_krnl(int *__restrict__ index, const int *__restrict__ keys,
+                             int m, int n, int begi, int endi, int stride)
+{
 // the index of first the particle contained in a non-empty cell will be associated to each cell
 // if the cell is empty, the index of first particle contained in a successive cell will be associated to it
 // if there are no non-empty successive cells, "n" will be associated to it
 // m: number of cells (size of index)
 // n: number of particles (size of keys)
-{
 	int i = begi;
 	if (i == 0)
 	{
@@ -166,7 +178,8 @@ inline __host__ __device__ void indexLeaves_krnl(int *__restrict__ index, const 
 	}
 }
 
-__global__ void indexLeaves(int *index, const int *keys, int m, int n)
+__global__
+void indexLeaves(int *index, const int *keys, int m, int n)
 {
 	indexLeaves_krnl(index, keys, m, n, blockDim.x * blockIdx.x + threadIdx.x, n, gridDim.x * blockDim.x);
 }
@@ -181,11 +194,12 @@ void indexLeaves_cpu(int *index, const int *keys, int m, int n)
 		threads[i].join();
 }
 
-inline __host__ __device__ void multLeaves_krnl(int *__restrict__ mult, const int *__restrict__ index, int m, int n,
-                                                int begi, int endi, int stride)
+__host__ __device__
+inline void multLeaves_krnl(int *__restrict__ mult, const int *__restrict__ index, int m, int n,
+                            int begi, int endi, int stride)
+{
 // calculate the number of particles (multiplicity) of each cell
 // it is trivial to calculate it after the index array is computed
-{
 	int i = begi;
 	while (i < min(endi, m-1))
 	{
@@ -196,7 +210,8 @@ inline __host__ __device__ void multLeaves_krnl(int *__restrict__ mult, const in
 		mult[i] = (n - index[i]);
 }
 
-__global__ void multLeaves(int *mult, const int *index, int m, int n)
+__global__
+void multLeaves(int *mult, const int *index, int m, int n)
 {
 	multLeaves_krnl(mult, index, m, n, blockDim.x * blockIdx.x + threadIdx.x, m, gridDim.x * blockDim.x);
 }
@@ -211,10 +226,11 @@ void multLeaves_cpu(int *mult, const int *index, int m, int n)
 		threads[i].join();
 }
 
-__global__ void monopoleLeaves(SCAL *monopole, const int *mult, int m)
+__global__
+void monopoleLeaves(SCAL *monopole, const int *mult, int m)
+{
 // calculate monopoles for each cell
 // if all particles have the same charge/mass, then they are proportional to multiplicities
-{
 	for (int i = blockDim.x * blockIdx.x + threadIdx.x;
 	     i < m;
 	     i += gridDim.x * blockDim.x)
@@ -223,10 +239,11 @@ __global__ void monopoleLeaves(SCAL *monopole, const int *mult, int m)
 	}
 }
 
-inline __host__ __device__ void centerLeaves_krnl(ALIGNED_VEC *__restrict__ center, const int *mult, const int *index,
-                                                  const ALIGNED_VEC *__restrict__ p, int begi, int endi, int stride)
-// calculate the center of charge/mass for each cell
+__host__ __device__
+inline void centerLeaves_krnl(ALIGNED_VEC *__restrict__ center, const int *mult, const int *index,
+                              const ALIGNED_VEC *__restrict__ p, int begi, int endi, int stride)
 {
+// calculate the center of charge/mass for each cell
 	for (int i = begi; i < endi; i += stride)
 	{
 		int mlt = mult[i];
@@ -242,7 +259,8 @@ inline __host__ __device__ void centerLeaves_krnl(ALIGNED_VEC *__restrict__ cent
 	}
 }
 
-__global__ void centerLeaves(ALIGNED_VEC *center, const int *mult, const int *index, const ALIGNED_VEC *p, int m)
+__global__
+void centerLeaves(ALIGNED_VEC *center, const int *mult, const int *index, const ALIGNED_VEC *p, int m)
 {
 	centerLeaves_krnl(center, mult, index, p, blockDim.x * blockIdx.x + threadIdx.x, m, gridDim.x * blockDim.x);
 }
@@ -257,14 +275,15 @@ void centerLeaves_cpu(ALIGNED_VEC *center, const int *mult, const int *index, co
 		threads[i].join();
 }
 
-inline __host__ __device__ void p2p2_krnl(ALIGNED_VEC *__restrict__ a, const int *mult, const int *index,
-                                          const ALIGNED_VEC *__restrict__ p, int side, int radius, SCAL d_EPS2,
-                                          int begi, int endi, int stride)
+__host__ __device__
+inline void p2p2_krnl(ALIGNED_VEC *__restrict__ a, const int *mult, const int *index,
+                      const ALIGNED_VEC *__restrict__ p, int side, int radius, SCAL d_EPS2,
+                      int begi, int endi, int stride)
+{
 // particle to particle interaction
 // radius: it is the infinity-norm radius (given as number of leaf cells) of the neighborhood area
 //         centered on the leaf cell that contain the particle. Only interactions in this range
 //         are considered here
-{
 	for (int ij = begi; ij < endi; ij += stride)
 	{
 		int ind1 = index[ij];
@@ -302,7 +321,8 @@ inline __host__ __device__ void p2p2_krnl(ALIGNED_VEC *__restrict__ a, const int
 	}
 }
 
-__global__ void p2p2(ALIGNED_VEC *a, const int *mult, const int *index, const ALIGNED_VEC *p, int m, int side, int radius, SCAL d_EPS2)
+__global__
+void p2p2(ALIGNED_VEC *a, const int *mult, const int *index, const ALIGNED_VEC *p, int m, int side, int radius, SCAL d_EPS2)
 {
 	p2p2_krnl(a, mult, index, p, side, radius, d_EPS2, blockDim.x * blockIdx.x + threadIdx.x, m, gridDim.x * blockDim.x);
 }
@@ -317,14 +337,15 @@ void p2p2_cpu(ALIGNED_VEC *a, const int *mult, const int *index, const ALIGNED_V
 		threads[i].join();
 }
 
-inline __host__ __device__ void p2p3_krnl(ALIGNED_VEC *__restrict__ a, const int *mult, const int *index,
-                                          const ALIGNED_VEC *__restrict__ p, int side, int radius, SCAL d_EPS2,
-                                          int begi, int endi, int stride)
+__host__ __device__
+inline void p2p3_krnl(ALIGNED_VEC *__restrict__ a, const int *mult, const int *index,
+                      const ALIGNED_VEC *__restrict__ p, int side, int radius, SCAL d_EPS2,
+                      int begi, int endi, int stride)
+{
 // particle to particle interaction
 // radius: it is the infinity-norm radius (given as number of leaf cells) of the neighborhood area
 //         centered on the leaf cell that contain the particle. Only interactions in this range
 //         are considered here
-{
 	for (int ijk = begi; ijk < endi; ijk += stride)
 	{
 		int ind1 = index[ijk];
@@ -365,7 +386,8 @@ inline __host__ __device__ void p2p3_krnl(ALIGNED_VEC *__restrict__ a, const int
 	}
 }
 
-__global__ void p2p3(ALIGNED_VEC *a, const int *mult, const int *index, const ALIGNED_VEC *p, int m, int side, int radius, SCAL d_EPS2)
+__global__
+void p2p3(ALIGNED_VEC *a, const int *mult, const int *index, const ALIGNED_VEC *p, int m, int side, int radius, SCAL d_EPS2)
 {
 	p2p3_krnl(a, mult, index, p, side, radius, d_EPS2, blockDim.x * blockIdx.x + threadIdx.x, m, gridDim.x * blockDim.x);
 }
@@ -380,10 +402,11 @@ void p2p3_cpu(ALIGNED_VEC *a, const int *mult, const int *index, const ALIGNED_V
 		threads[i].join();
 }
 
-__global__ void buildTree2(Tree tree, int l) // L-1 -> 0
+__global__
+void buildTree2(Tree tree, int l)
+{ // L-1 -> 0
 // build the l-th of cells after the deeper one (l+1)-th
 // "tree" contains only pointers to the actual tree in memory
-{
 	int sidel = tree_side(l);
 	int sidelp = tree_side(l+1);
 	int beg = tree_beg(l), begp = tree_beg(l+1);
@@ -417,9 +440,10 @@ __global__ void buildTree2(Tree tree, int l) // L-1 -> 0
 	}
 }
 
-__global__ void c2c2(Tree tree, int l, int radius, SCAL d_EPS2) // L -> 1
+__global__
+void c2c2(Tree tree, int l, int radius, SCAL d_EPS2)
+{ // L -> 1
 // cell to cell interaction
-{
 	int sidel = tree_side(l);
 	int beg = tree_beg(l);
 	int n = tree_n(l);
@@ -466,9 +490,10 @@ __global__ void c2c2(Tree tree, int l, int radius, SCAL d_EPS2) // L -> 1
 	}
 }
 
-__global__ void pushl(Tree tree, int l) // 0 -> L-1
+__global__
+void pushl(Tree tree, int l)
+{ // 0 -> L-1
 // push informations about the field from l-th level to (l+1)-th level
-{
 	int sidel = tree_side(l);
 	int sidelp = tree_side(l+1);
 	int beg = tree_beg(l), begp = tree_beg(l+1);
@@ -488,10 +513,11 @@ __global__ void pushl(Tree tree, int l) // 0 -> L-1
 	}
 }
 
-__global__ void pushLeaves(ALIGNED_VEC *__restrict__ a, const ALIGNED_VEC *__restrict__ field,
-						   const int *mult, const int *index, int m)
-// push informations about the field from leaves to individual particles
+__global__
+void pushLeaves(ALIGNED_VEC *__restrict__ a, const ALIGNED_VEC *__restrict__ field,
+                const int *mult, const int *index, int m)
 {
+// push informations about the field from leaves to individual particles
 	for (int i = blockDim.x * blockIdx.x + threadIdx.x;
 	     i < m;
 	     i += gridDim.x * blockDim.x)
@@ -503,15 +529,17 @@ __global__ void pushLeaves(ALIGNED_VEC *__restrict__ a, const ALIGNED_VEC *__res
 	}
 }
 
-inline __host__ __device__ void rescale_krnl(ALIGNED_VEC *a, const SCAL *param, int begi, int endi, int stride)
-// rescale accelerations by a factor
+__host__ __device__
+inline void rescale_krnl(ALIGNED_VEC *a, const SCAL *param, int begi, int endi, int stride)
 {
+// rescale accelerations by a factor
 	SCAL c = param[0];
 	for (int i = begi; i < endi; i += stride)
 		a[i] = aligned_store(aligned_load(a[i])*c);
 }
 
-__global__ void rescale(ALIGNED_VEC *a, int n, const SCAL *param)
+__global__
+void rescale(ALIGNED_VEC *a, int n, const SCAL *param)
 {
 	rescale_krnl(a, param, blockDim.x * blockIdx.x + threadIdx.x, n, gridDim.x * blockDim.x);
 }

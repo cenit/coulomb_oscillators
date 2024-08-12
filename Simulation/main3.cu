@@ -74,8 +74,8 @@ void coulombOscillatorFMMKD3_cpu(ALIGNED_VEC *p, ALIGNED_VEC *a, int n, const SC
 }
 
 void centerDist(ALIGNED_VEC *data, int n)
-// center the sampled distribution
 {
+// center the sampled distribution
 	VEC d{};
 	for (int i = 0; i < n; ++i)
 		d += aligned_load(data[i]);
@@ -85,8 +85,8 @@ void centerDist(ALIGNED_VEC *data, int n)
 }
 
 void adjustRMS(ALIGNED_VEC *data, int n, VEC adj)
-// adjust the RMS of the sampled distribution such that it's equal to adj
 {
+// adjust the RMS of the sampled distribution such that it's equal to adj
 	VEC d{}, datai;
 	for (int i = 0; i < n; ++i)
 	{
@@ -100,10 +100,10 @@ void adjustRMS(ALIGNED_VEC *data, int n, VEC adj)
 }
 
 void initU(ALIGNED_VEC *data, int n, VEC a, VEC b, std::mt19937_64 &gen)
+{
 // Uniform distribution over a rectangular cuboid
 // velocities remain uninitialized
 // a_j < x_ij < b_j for each particle i and coordinate j = 1,2,3
-{
 	int nBodies = n/2;
 	std::uniform_real_distribution<SCAL> distx(a.x, b.x);
 	std::uniform_real_distribution<SCAL> disty(a.y, b.y);
@@ -122,10 +122,10 @@ void initU(ALIGNED_VEC *data, int n, VEC a, VEC b, std::mt19937_64 &gen)
 }
 
 void initGA(ALIGNED_VEC *data, int n, VEC x, VEC u, std::mt19937_64 &gen)
+{
 // Gaussian distribution
 // x is the position std.dev.
 // u is the velocity std.dev.
-{
 	std::normal_distribution<SCAL> dist((SCAL)0, (SCAL)1); // Marsaglia method?
 									// mean = 0, std.dev. = 1
 	int nBodies = n/2;
@@ -156,9 +156,9 @@ void initGA(ALIGNED_VEC *data, int n, VEC x, VEC u, std::mt19937_64 &gen)
 
 SCAL test_accuracy(void(*test)(ALIGNED_VEC*, ALIGNED_VEC*, int, const SCAL*), void(*ref)(ALIGNED_VEC*, ALIGNED_VEC*, int, const SCAL*),
 				   SCAL *d_buf, int n, const SCAL* param, bool b_update = false)
+{
 // test the accuracy of "test" function with respect to the reference "ref" function
 // print the mean relative error on console window
-{
 	static int n_max = 0;
 	static SCAL *d_relerr = nullptr;
 	static SCAL relerr;
@@ -201,10 +201,10 @@ SCAL test_accuracy(void(*test)(ALIGNED_VEC*, ALIGNED_VEC*, int, const SCAL*), vo
 
 SCAL test_accuracy_cpu(void(*test)(ALIGNED_VEC*, ALIGNED_VEC*, int, const SCAL*), void(*ref)(ALIGNED_VEC*, ALIGNED_VEC*, int, const SCAL*),
 					   SCAL *buf, int n, const SCAL* param)
+{
 // test the accuracy of "test" function with respect to the reference "ref" function
 // print the mean relative error on console window
 // both functions must run on CPU
-{
 	static int n_max = 0;
 	std::vector<SCAL> relerr(CPU_THREADS);
 	static ALIGNED_VEC *tmp = nullptr;

@@ -29,19 +29,22 @@
 #define ONES_VEC VEC{1,1,1,1}
 #endif
 
-inline __forceinline__ __host__ __device__ bool isPow2(unsigned int x)
+__forceinline__ __host__ __device__ 
+inline bool isPow2(unsigned int x)
 {
     return (x&(x-1))==0;
 }
 
-inline __device__ __host__ SCAL rel_diff1(VEC x, VEC ref)
+__device__ __host__
+inline SCAL rel_diff1(VEC x, VEC ref)
 {
 	VEC d = x - ref;
 	SCAL dist2 = dot(d,d), ref2 = dot(ref,ref) + SCAL(1.e-18);
 	return sqrt(max(dist2/ref2, SCAL(0)));
 }
 
-inline __device__ __host__ SCAL rel_diff2(VEC x, VEC ref)
+__device__ __host__
+inline SCAL rel_diff2(VEC x, VEC ref)
 {
 	VEC d = x - ref;
 	VEC s = x + ref;
@@ -51,14 +54,16 @@ inline __device__ __host__ SCAL rel_diff2(VEC x, VEC ref)
 
 struct VecMin
 {
-	__device__ __host__ __forceinline__ ALIGNED_VEC operator()(const ALIGNED_VEC& a, const ALIGNED_VEC& b) const
+	__device__ __host__ __forceinline__
+	ALIGNED_VEC operator()(const ALIGNED_VEC& a, const ALIGNED_VEC& b) const
 	{
 		return aligned_store(fmin(aligned_load(a), aligned_load(b)));
 	}
 };
 struct VecMax
 {
-	__device__ __host__ __forceinline__ ALIGNED_VEC operator()(const ALIGNED_VEC& a, const ALIGNED_VEC& b) const
+	__device__ __host__ __forceinline__
+	ALIGNED_VEC operator()(const ALIGNED_VEC& a, const ALIGNED_VEC& b) const
 	{
 		return aligned_store(fmax(aligned_load(a), aligned_load(b)));
 	}
@@ -80,7 +85,8 @@ void minmaxReduce2(ALIGNED_VEC *minmax, const ALIGNED_VEC *src, unsigned int n, 
 }
 
 template <int blockSize>
-__global__ void relerrReduce2_krnl(SCAL *relerr, const ALIGNED_VEC *__restrict__ x, const ALIGNED_VEC *__restrict__ xref, int n)
+__global__
+void relerrReduce2_krnl(SCAL *relerr, const ALIGNED_VEC *__restrict__ x, const ALIGNED_VEC *__restrict__ xref, int n)
 {
 	using BlockReduceT = cub::BlockReduce<SCAL, blockSize>;
 	__shared__ typename BlockReduceT::TempStorage temp_storage;
@@ -104,7 +110,8 @@ void relerrReduce2(SCAL *relerr, const ALIGNED_VEC *x, const ALIGNED_VEC *xref, 
 }
 
 template <int blockSize>
-__global__ void relerrReduce3Num_krnl(SCAL *relerr, const ALIGNED_VEC *__restrict__ x, const ALIGNED_VEC *__restrict__ xref, int n)
+__global__
+void relerrReduce3Num_krnl(SCAL *relerr, const ALIGNED_VEC *__restrict__ x, const ALIGNED_VEC *__restrict__ xref, int n)
 {
 	using BlockReduceT = cub::BlockReduce<SCAL, blockSize>;
 	__shared__ typename BlockReduceT::TempStorage temp_storage;
@@ -123,7 +130,8 @@ __global__ void relerrReduce3Num_krnl(SCAL *relerr, const ALIGNED_VEC *__restric
 		myAtomicAdd(relerr, result);
 }
 template <int blockSize>
-__global__ void relerrReduce3Den_krnl(SCAL *relerr, const ALIGNED_VEC *xref, int n)
+__global__
+void relerrReduce3Den_krnl(SCAL *relerr, const ALIGNED_VEC *xref, int n)
 {
 	using BlockReduceT = cub::BlockReduce<SCAL, blockSize>;
 	__shared__ typename BlockReduceT::TempStorage temp_storage;
@@ -156,7 +164,8 @@ void relerrReduce3(SCAL *relerr, const ALIGNED_VEC *x, const ALIGNED_VEC *xref, 
 }
 
 template <int blockSize, bool nIsPow2>
-__global__ void minmaxReduce_krnl(ALIGNED_VEC *minmax_, const ALIGNED_VEC *x, unsigned int n)
+__global__
+void minmaxReduce_krnl(ALIGNED_VEC *minmax_, const ALIGNED_VEC *x, unsigned int n)
 {
 	extern __shared__ ALIGNED_VEC sminmax[];
 
@@ -359,7 +368,8 @@ void minmaxReduce(ALIGNED_VEC *minmax, const ALIGNED_VEC *src, unsigned int n, i
 }
 
 template <int blockSize, bool nIsPow2>
-__global__ void relerrReduce_krnl(SCAL *relerr, const ALIGNED_VEC *x, const ALIGNED_VEC *xref, unsigned int n)
+__global__
+void relerrReduce_krnl(SCAL *relerr, const ALIGNED_VEC *x, const ALIGNED_VEC *xref, unsigned int n)
 {
 	extern __shared__ SCAL srelerr[];
 
@@ -500,10 +510,11 @@ void relerrReduce(SCAL *relerr, const ALIGNED_VEC *x, const ALIGNED_VEC *xref, u
 	}
 }
 
-inline __host__ __device__ VEC binarypow(VEC x, int n)
+__host__ __device__
+inline VEC binarypow(VEC x, int n)
+{
 // calculates x^n with O(log(n)) multiplications
 // assumes n >= 1
-{
 	VEC y = ONES_VEC;
 	while (n > 1)
 	{
@@ -515,10 +526,11 @@ inline __host__ __device__ VEC binarypow(VEC x, int n)
 }
 
 template <int blockSize, bool nIsPow2>
-__global__ void powReduce_krnl(ALIGNED_VEC *power, const ALIGNED_VEC *x, int expo, unsigned int n)
+__global__
+void powReduce_krnl(ALIGNED_VEC *power, const ALIGNED_VEC *x, int expo, unsigned int n)
+{
 // sum the powers of vectors x:
 // power = sum_i x_i ^ expo
-{
 	extern __shared__ ALIGNED_VEC spow[];
 
 	unsigned int tid = threadIdx.x;

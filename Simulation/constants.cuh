@@ -52,14 +52,16 @@ bool coll = true, b_unsort = true;
 SCAL dens_inhom = 1;
 
 template <typename T>
-inline __forceinline__ __device__ T myAtomicAdd(T* address, T val)
+__forceinline__ __device__
+inline T myAtomicAdd(T* address, T val)
 {
 	return atomicAdd(address, val);
 }
 
 #if __CUDA_ARCH__ < 600
 
-inline __device__ double myAtomicAdd(double* address, double val)
+__device__
+inline double myAtomicAdd(double* address, double val)
 {
     unsigned long long* address_as_ull = (unsigned long long*)address;
     unsigned long long old = *address_as_ull, assumed;
@@ -75,41 +77,48 @@ inline __device__ double myAtomicAdd(double* address, double val)
 #endif // __CUDA_ARCH__ < 600
 
 template <typename T>
-inline __forceinline__ __device__ T myAtomicMin(T* address, T val)
+__forceinline__ __device__
+inline T myAtomicMin(T* address, T val)
 {
 	return atomicMin(address, val);
 }
 template <typename T>
-inline __forceinline__ __device__ T myAtomicMax(T* address, T val)
+__forceinline__ __device__
+inline T myAtomicMax(T* address, T val)
 {
 	return atomicMax(address, val);
 }
 
-inline __device__ float myAtomicMin(float* address, float val)
+__device__
+inline float myAtomicMin(float* address, float val)
 {
 	return !signbit(val) ? __int_as_float(atomicMin((int*)address, __float_as_int(val)))
 		: __uint_as_float(atomicMax((unsigned*)address, __float_as_uint(val)));
 }
-inline __device__ float myAtomicMax(float* address, float val)
+__device__
+inline float myAtomicMax(float* address, float val)
 {
 	return !signbit(val) ? __int_as_float(atomicMax((int*)address, __float_as_int(val)))
 		: __uint_as_float(atomicMin((unsigned*)address, __float_as_uint(val)));
 }
 
-inline __device__ double myAtomicMin(double* address, double val)
+__device__
+inline double myAtomicMin(double* address, double val)
 {
 	return !signbit(val) ? __longlong_as_double(atomicMin((long long*)address, __double_as_longlong(val)))
 		: __longlong_as_double(atomicMax((unsigned long long*)address, (unsigned long long)__double_as_longlong(val)));
 }
-inline __device__ double myAtomicMax(double* address, double val)
+__device__
+inline double myAtomicMax(double* address, double val)
 {
 	return !signbit(val) ? __longlong_as_double(atomicMax((long long*)address, __double_as_longlong(val)))
 		: __longlong_as_double(atomicMin((unsigned long long*)address, (unsigned long long)__double_as_longlong(val)));
 }
 
-inline __forceinline__ __host__ __device__ uint32_t clz(uint32_t val)
-// count leading zeros
+__forceinline__ __host__ __device__
+inline uint32_t clz(uint32_t val)
 {
+// count leading zeros
 #ifdef __CUDA_ARCH__
 	return __clz(val);
 #else
@@ -117,10 +126,11 @@ inline __forceinline__ __host__ __device__ uint32_t clz(uint32_t val)
 #endif
 }
 
-inline __forceinline__ __host__ __device__ uint32_t bitceil(uint32_t val)
+__forceinline__ __host__ __device__
+inline uint32_t bitceil(uint32_t val)
+{
 // find the smallest power of two that is equal to or greater than `val`
 // used in `fmm_p2p3_kdtree` and in `fmm_p2p3_kdtree_coalesced` inside `fmm_cart3_kdtree.cuh`
-{
 #ifdef __CUDA_ARCH__
 	if (val <= 1)
 		return 1;
@@ -130,11 +140,13 @@ inline __forceinline__ __host__ __device__ uint32_t bitceil(uint32_t val)
 #endif
 }
 
-inline __forceinline__ __host__ __device__ float reciprocal_sqrt(float x)
+__forceinline__ __host__ __device__
+inline float reciprocal_sqrt(float x)
 {
 	return rsqrtf(x);
 }
-inline __forceinline__ __host__ __device__ double reciprocal_sqrt(double x)
+__forceinline__ __host__ __device__
+inline double reciprocal_sqrt(double x)
 {
 	return rsqrt(x);
 }
@@ -147,10 +159,11 @@ struct mu
 	int a, s; // "add" indicator and shift amount
 };
 
-inline __host__ __device__ mu magicu(unsigned d)
+__host__ __device__
+inline mu magicu(unsigned d)
+{
 // prepare magic number and other constants for unsigned division by 'd'
 // must have 1 <= d <= 2^32 - 1
-{
 	int p;
 	unsigned nc, delta, q1, r1, q2, r2;
 	mu magu;
@@ -196,9 +209,10 @@ inline __host__ __device__ mu magicu(unsigned d)
 	return magu; // (magu.a was set above)
 }
 
-inline __forceinline__ __host__ __device__ unsigned magicdivu(unsigned x, mu magic)
-// magic unsigned division
+__forceinline__ __host__ __device__
+inline unsigned magicdivu(unsigned x, mu magic)
 {
+// magic unsigned division
 #ifdef __CUDA_ARCH__
 	return (__umulhi(x, magic.M) + x*magic.a) >> magic.s;
 #else
@@ -206,10 +220,11 @@ inline __forceinline__ __host__ __device__ unsigned magicdivu(unsigned x, mu mag
 #endif
 }
 
-inline __forceinline__ __host__ __device__ unsigned magicremu(unsigned x, unsigned d, mu magic)
+__forceinline__ __host__ __device__
+inline unsigned magicremu(unsigned x, unsigned d, mu magic)
+{
 // magic unsigned remainder
 // d is the divisor, the same as the one used to construct the magic number
-{
 	return x - d*magicdivu(x, magic);
 }
 

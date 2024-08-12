@@ -72,7 +72,8 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort =
 	}
 }
 
-inline __forceinline__ __device__ __host__ VEC aligned_load(const ALIGNED_VEC& v)
+__forceinline__ __device__ __host__ 
+inline VEC aligned_load(const ALIGNED_VEC& v)
 {
 #if DIM == 3 && ALIGNED == 1
 	ALIGNED_VEC t(v);
@@ -82,7 +83,8 @@ inline __forceinline__ __device__ __host__ VEC aligned_load(const ALIGNED_VEC& v
 #endif
 }
 
-inline __forceinline__ __device__ __host__ ALIGNED_VEC aligned_store(const VEC& v)
+__forceinline__ __device__ __host__
+inline ALIGNED_VEC aligned_store(const VEC& v)
 {
 #if DIM == 3 && ALIGNED == 1
 	return {v.x, v.y, v.z};
@@ -109,10 +111,11 @@ std::ostream& operator<<(std::ostream& os, VEC_T(SCAL, 4) a)
 	return os;
 }
 
-__global__ void step_krnl(ALIGNED_VEC *__restrict__ b, const ALIGNED_VEC *__restrict__ a, SCAL ds, int n)
+__global__
+void step_krnl(ALIGNED_VEC *__restrict__ b, const ALIGNED_VEC *__restrict__ a, SCAL ds, int n)
+{
 // multiply-addition kernel
 // b += a * ds
-{
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	while (i < n)
 	{
@@ -143,10 +146,11 @@ void step_cpu(ALIGNED_VEC *__restrict__ b, const ALIGNED_VEC *__restrict__ a, SC
 		threads[i].join();
 }
 
-__global__ void add_elastic_krnl(const ALIGNED_VEC *__restrict__ p, ALIGNED_VEC *__restrict__ a, int n,
-                                 const ALIGNED_VEC *__restrict__ param)
-// elastic force computation kernel with elastic costants defined in "param" pointer
+__global__
+void add_elastic_krnl(const ALIGNED_VEC *__restrict__ p, ALIGNED_VEC *__restrict__ a, int n,
+                      const ALIGNED_VEC *__restrict__ param)
 {
+// elastic force computation kernel with elastic costants defined in "param" pointer
 	VEC k = -aligned_load(param[0]);
 	for (int i = blockDim.x * blockIdx.x + threadIdx.x;
 		 i < n;
@@ -159,9 +163,10 @@ __global__ void add_elastic_krnl(const ALIGNED_VEC *__restrict__ p, ALIGNED_VEC 
 	}
 }
 
-__global__ void add_elastic_krnl(const ALIGNED_VEC *__restrict__ p, ALIGNED_VEC *__restrict__ a, int n)
-// elastic force computation kernel
+__global__
+void add_elastic_krnl(const ALIGNED_VEC *__restrict__ p, ALIGNED_VEC *__restrict__ a, int n)
 {
+// elastic force computation kernel
 	for (int i = blockDim.x * blockIdx.x + threadIdx.x;
 		 i < n;
 		 i += gridDim.x * blockDim.x)
@@ -200,10 +205,11 @@ void add_elastic_cpu(ALIGNED_VEC *__restrict__ p, ALIGNED_VEC *__restrict__ a, i
 		threads[i].join();
 }
 
-__global__ void elastic_krnl(const ALIGNED_VEC *__restrict__ p, ALIGNED_VEC *__restrict__ a, int n,
-                             const ALIGNED_VEC *__restrict__ param)
-// elastic force computation kernel with elastic costants defined in "param" pointer
+__global__
+void elastic_krnl(const ALIGNED_VEC *__restrict__ p, ALIGNED_VEC *__restrict__ a, int n,
+                  const ALIGNED_VEC *__restrict__ param)
 {
+// elastic force computation kernel with elastic costants defined in "param" pointer
 	VEC k = -aligned_load(param[0]);
 	for (int i = blockDim.x * blockIdx.x + threadIdx.x;
 		 i < n;
@@ -213,9 +219,10 @@ __global__ void elastic_krnl(const ALIGNED_VEC *__restrict__ p, ALIGNED_VEC *__r
 	}
 }
 
-__global__ void elastic_krnl(const ALIGNED_VEC *__restrict__ p, ALIGNED_VEC *__restrict__ a, int n)
-// elastic force computation kernel
+__global__
+void elastic_krnl(const ALIGNED_VEC *__restrict__ p, ALIGNED_VEC *__restrict__ a, int n)
 {
+// elastic force computation kernel
 	for (int i = blockDim.x * blockIdx.x + threadIdx.x;
 		 i < n;
 		 i += gridDim.x * blockDim.x)
@@ -255,9 +262,10 @@ void elastic_cpu(ALIGNED_VEC *__restrict__ p, ALIGNED_VEC *__restrict__ a, int n
 }
 
 template<typename T>
-__global__ void gather_krnl(T *__restrict__ dst, const T *__restrict__ src, const int *__restrict__ map, int n)
-// dst array is built from src array through a permutation map pointer
+__global__
+void gather_krnl(T *__restrict__ dst, const T *__restrict__ src, const int *__restrict__ map, int n)
 {
+// dst array is built from src array through a permutation map pointer
     for (int i = blockDim.x * blockIdx.x + threadIdx.x;
 		 i < n;
 		 i += gridDim.x * blockDim.x)
@@ -281,9 +289,10 @@ void gather_cpu(T *__restrict__ dst, const T *__restrict__ src, const int *__res
 }
 
 template<typename T>
-__global__ void gather_inverse_krnl(T *__restrict__ dst, const T *__restrict__ src, const int *__restrict__ map, int n)
-// dst array is built from src array through the inverse permutation of map pointer
+__global__
+void gather_inverse_krnl(T *__restrict__ dst, const T *__restrict__ src, const int *__restrict__ map, int n)
 {
+// dst array is built from src array through the inverse permutation of map pointer
     for (int i = blockDim.x * blockIdx.x + threadIdx.x;
 		 i < n;
 		 i += gridDim.x * blockDim.x)
@@ -307,9 +316,10 @@ void gather_inverse_cpu(T *__restrict__ dst, const T *__restrict__ src, const in
 }
 
 template<typename T>
-__global__ void copy_krnl(T *__restrict__ dst, const T *__restrict__ src, int n)
-// copy content from src to dst
+__global__
+void copy_krnl(T *__restrict__ dst, const T *__restrict__ src, int n)
 {
+// copy content from src to dst
     for (int i = blockDim.x * blockIdx.x + threadIdx.x;
 		 i < n;
 		 i += gridDim.x * blockDim.x)

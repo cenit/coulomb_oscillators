@@ -400,33 +400,36 @@ __constant__ constexpr int d_contract_off[]{
 	0, 1, 4, 10, 20, 35, 56, 84, 120, 165, 220,
 };
 
-inline __host__ __device__ long long factorial(int n)
+__host__ __device__
+inline long long factorial(int n)
+{
 // factorial
 // returns n!
 // n >= 0 must hold
-{
 	long long res = 1;
 	for (long long i = n; i > 1; --i)
 		res *= i;
 	return res;
 }
 
-inline __host__ __device__ long long dfactorial(int n)
+__host__ __device__
+inline long long dfactorial(int n)
+{
 // double factorial
 // returns n!!
 // assumes n >= -1
-{
 	long long res = 1;
 	for (long long i = n; i > 1; i -= 2)
 		res *= i;
 	return res;
 }
 
-inline __host__ __device__ int binomial(int n, int k)
+__host__ __device__ 
+inline int binomial(int n, int k)
+{
 // binomial coefficient
 // returns n! / (k! * (n-k)!)
 // it assumes 0 <= k <= n
-{
 	if (k > n/2)
 		k = n - k;
 	int res = 1;
@@ -435,11 +438,12 @@ inline __host__ __device__ int binomial(int n, int k)
 	return res;
 }
 
-inline __host__ __device__ int trinomial(int n, int j, int k)
+__host__ __device__
+inline int trinomial(int n, int j, int k)
+{
 // trinomial coefficient
 // returns n! / (j! * k! * (n-j-k)!)
 // it assumes 0 <= j,k,j+k <= n
-{
 	if (j > n-j-k)
 		j = n-j-k;
 	if (k > n-j-k)
@@ -453,28 +457,30 @@ inline __host__ __device__ int trinomial(int n, int j, int k)
 	return res;
 }
 
-
-inline __host__ __device__ long long factorialfrac(int n, int k)
+__host__ __device__
+inline long long factorialfrac(int n, int k)
+{
 // division between two factorials
 // returns n! / k!
 // it assumes 0 <= k <= n
-{
 	long long res = 1;
 	for (long long i = n; i > k; --i)
 		res *= i;
 	return res;
 }
 
-inline __host__ __device__ int paritysign(int n)
+__host__ __device__
+inline int paritysign(int n)
+{
 // (-1)^n
 // returns 1 if n is even and -1 if n is odd
-{
 	return 1 - 2 * (n & 1);
 }
 
-inline __host__ __device__ SCAL binarypow(SCAL x, int n)
-// calculates x^n with O(log(n)) multiplications
+__host__ __device__
+inline SCAL binarypow(SCAL x, int n)
 {
+// calculates x^n with O(log(n)) multiplications
 	if (n == 0)
 		return (SCAL)1; // note: 0^0 will give 1
 	if (n < 0)
@@ -492,7 +498,8 @@ inline __host__ __device__ SCAL binarypow(SCAL x, int n)
 	return x * y;
 }
 
-inline __forceinline__ __host__ __device__ SCAL static_factorial(int n)
+__forceinline__ __host__ __device__
+inline SCAL static_factorial(int n)
 {
 #ifdef __CUDA_ARCH__
 	return d_factorial[n];
@@ -501,7 +508,8 @@ inline __forceinline__ __host__ __device__ SCAL static_factorial(int n)
 #endif
 }
 
-inline __forceinline__ __host__ __device__ SCAL static_edfactorial(int n)
+__forceinline__ __host__ __device__
+inline SCAL static_edfactorial(int n)
 {
 #ifdef __CUDA_ARCH__
 	return d_edfactorial[n>>1];
@@ -510,7 +518,8 @@ inline __forceinline__ __host__ __device__ SCAL static_edfactorial(int n)
 #endif
 }
 
-inline __forceinline__ __host__ __device__ SCAL static_odfactorial(int n)
+__forceinline__ __host__ __device__
+inline SCAL static_odfactorial(int n)
 {
 #ifdef __CUDA_ARCH__
 	return d_odfactorial[n>>1];
@@ -519,7 +528,8 @@ inline __forceinline__ __host__ __device__ SCAL static_odfactorial(int n)
 #endif
 }
 
-inline __forceinline__ __host__ __device__ SCAL power_of_2(int n)
+__forceinline__ __host__ __device__
+inline SCAL power_of_2(int n)
 {
 #ifdef __CUDA_ARCH__
 	return d_power_of_2[n];
@@ -528,7 +538,8 @@ inline __forceinline__ __host__ __device__ SCAL power_of_2(int n)
 #endif
 }
 
-inline __forceinline__ __host__ __device__ SCAL inv_factorial(int n)
+__forceinline__ __host__ __device__
+inline SCAL inv_factorial(int n)
 {
 #ifdef __CUDA_ARCH__
 	return d_inv_factorial[n];
@@ -537,7 +548,8 @@ inline __forceinline__ __host__ __device__ SCAL inv_factorial(int n)
 #endif
 }
 
-inline __forceinline__ __host__ __device__ SCAL inv_power_of_2(int n)
+__forceinline__ __host__ __device__
+inline SCAL inv_power_of_2(int n)
 {
 #ifdef __CUDA_ARCH__
 	return d_inv_power_of_2[n];
@@ -546,15 +558,18 @@ inline __forceinline__ __host__ __device__ SCAL inv_power_of_2(int n)
 #endif
 }
 
-inline __forceinline__ __device__ __host__ int flatten(int2 v, int s)
+__forceinline__ __host__ __device__
+inline int flatten(int2 v, int s)
 {
 	return v.x * s + v.y;
 }
-inline __forceinline__ __device__ __host__ int flatten(int3 v, int s)
+__forceinline__ __host__ __device__
+inline int flatten(int3 v, int s)
 {
 	return (v.x * s + v.y) * s + v.z;
 }
-inline __forceinline__ __device__ __host__ int flatten(int4 v, int s)
+__forceinline__ __host__ __device__
+inline int flatten(int4 v, int s)
 {
 	return ((v.x * s + v.y) * s + v.z) * s + v.w;
 }
@@ -585,33 +600,39 @@ inline SCAL fmin(VEC_T(SCAL, 4) a)
 	return std::fmin(std::fmin(std::fmin(a.x, a.y), a.z), a.w);
 }
 
-inline __forceinline__ __device__ __host__ int2 to_ivec(VEC_T(SCAL, 2) a)
+__forceinline__ __host__ __device__
+inline int2 to_ivec(VEC_T(SCAL, 2) a)
 {
 	return make_int2((int)a.x, (int)a.y);
 }
-inline __forceinline__ __device__ __host__ int3 to_ivec(VEC_T(SCAL, 3) a)
+__forceinline__ __host__ __device__
+inline int3 to_ivec(VEC_T(SCAL, 3) a)
 {
 	return make_int3((int)a.x, (int)a.y, (int)a.z);
 }
-inline __forceinline__ __device__ __host__ int4 to_ivec(VEC_T(SCAL, 4) a)
+__forceinline__ __host__ __device__
+inline int4 to_ivec(VEC_T(SCAL, 4) a)
 {
 	return make_int4((int)a.x, (int)a.y, (int)a.z, (int)a.w);
 }
 
-inline __forceinline__ __device__ __host__ VEC_T(SCAL, 2) sqrt(VEC_T(SCAL, 2) a)
+__forceinline__ __host__ __device__
+inline VEC_T(SCAL, 2) sqrt(VEC_T(SCAL, 2) a)
 {
 	a.x = sqrt(a.x);
 	a.y = sqrt(a.y);
 	return a;
 }
-inline __forceinline__ __device__ __host__ VEC_T(SCAL, 3) sqrt(VEC_T(SCAL, 3) a)
+__forceinline__ __host__ __device__
+inline VEC_T(SCAL, 3) sqrt(VEC_T(SCAL, 3) a)
 {
 	a.x = sqrt(a.x);
 	a.y = sqrt(a.y);
 	a.z = sqrt(a.z);
 	return a;
 }
-inline __forceinline__ __device__ __host__ VEC_T(SCAL, 4) sqrt(VEC_T(SCAL, 4) a)
+__forceinline__ __host__ __device__
+inline VEC_T(SCAL, 4) sqrt(VEC_T(SCAL, 4) a)
 {
 	a.x = sqrt(a.x);
 	a.y = sqrt(a.y);
@@ -620,14 +641,16 @@ inline __forceinline__ __device__ __host__ VEC_T(SCAL, 4) sqrt(VEC_T(SCAL, 4) a)
 	return a;
 }
 
-inline __forceinline__ __device__ __host__ VEC_T(SCAL, 2) fma(SCAL k, VEC_T(SCAL, 2) a, VEC_T(SCAL, 2) b)
+__forceinline__ __host__ __device__
+inline VEC_T(SCAL, 2) fma(SCAL k, VEC_T(SCAL, 2) a, VEC_T(SCAL, 2) b)
 {
 	VEC_T(SCAL, 2) c;
 	c.x = k * a.x + b.x;
 	c.y = k * a.y + b.y;
 	return c;
 }
-inline __forceinline__ __device__ __host__ VEC_T(SCAL, 3) fma(SCAL k, VEC_T(SCAL, 3) a, VEC_T(SCAL, 3) b)
+__forceinline__ __host__ __device__
+inline VEC_T(SCAL, 3) fma(SCAL k, VEC_T(SCAL, 3) a, VEC_T(SCAL, 3) b)
 {
 	VEC_T(SCAL, 3) c;
 	c.x = k * a.x + b.x;
@@ -635,7 +658,8 @@ inline __forceinline__ __device__ __host__ VEC_T(SCAL, 3) fma(SCAL k, VEC_T(SCAL
 	c.z = k * a.z + b.z;
 	return c;
 }
-inline __forceinline__ __device__ __host__ VEC_T(SCAL, 4) fma(SCAL k, VEC_T(SCAL, 4) a, VEC_T(SCAL, 4) b)
+__forceinline__ __host__ __device__
+inline VEC_T(SCAL, 4) fma(SCAL k, VEC_T(SCAL, 4) a, VEC_T(SCAL, 4) b)
 {
 	VEC_T(SCAL, 4) c;
 	c.x = k * a.x + b.x;
@@ -645,14 +669,16 @@ inline __forceinline__ __device__ __host__ VEC_T(SCAL, 4) fma(SCAL k, VEC_T(SCAL
 	return c;
 }
 
-inline __forceinline__ __device__ __host__ VEC_T(SCAL, 2) fma(VEC_T(SCAL, 2) k, VEC_T(SCAL, 2) a, VEC_T(SCAL, 2) b)
+__forceinline__ __host__ __device__
+inline VEC_T(SCAL, 2) fma(VEC_T(SCAL, 2) k, VEC_T(SCAL, 2) a, VEC_T(SCAL, 2) b)
 {
 	VEC_T(SCAL, 2) c;
 	c.x = k.x * a.x + b.x;
 	c.y = k.y * a.y + b.y;
 	return c;
 }
-inline __forceinline__ __device__ __host__ VEC_T(SCAL, 3) fma(VEC_T(SCAL, 3) k, VEC_T(SCAL, 3) a, VEC_T(SCAL, 3) b)
+__forceinline__ __host__ __device__
+inline VEC_T(SCAL, 3) fma(VEC_T(SCAL, 3) k, VEC_T(SCAL, 3) a, VEC_T(SCAL, 3) b)
 {
 	VEC_T(SCAL, 3) c;
 	c.x = k.x * a.x + b.x;
@@ -660,7 +686,8 @@ inline __forceinline__ __device__ __host__ VEC_T(SCAL, 3) fma(VEC_T(SCAL, 3) k, 
 	c.z = k.z * a.z + b.z;
 	return c;
 }
-inline __forceinline__ __device__ __host__ VEC_T(SCAL, 4) fma(VEC_T(SCAL, 4) k, VEC_T(SCAL, 4) a, VEC_T(SCAL, 4) b)
+__forceinline__ __host__ __device__
+inline VEC_T(SCAL, 4) fma(VEC_T(SCAL, 4) k, VEC_T(SCAL, 4) a, VEC_T(SCAL, 4) b)
 {
 	VEC_T(SCAL, 4) c;
 	c.x = k.x * a.x + b.x;
@@ -670,14 +697,16 @@ inline __forceinline__ __device__ __host__ VEC_T(SCAL, 4) fma(VEC_T(SCAL, 4) k, 
 	return c;
 }
 
-inline __forceinline__ __device__ __host__ VEC_T(SCAL, 2) fma(const SCAL* k, VEC_T(SCAL, 2) a, VEC_T(SCAL, 2) b)
+__forceinline__ __host__ __device__
+inline VEC_T(SCAL, 2) fma(const SCAL* k, VEC_T(SCAL, 2) a, VEC_T(SCAL, 2) b)
 {
 	VEC_T(SCAL, 2) c;
 	c.x = k[0] * a.x + b.x;
 	c.y = k[1] * a.y + b.y;
 	return c;
 }
-inline __forceinline__ __device__ __host__ VEC_T(SCAL, 3) fma(const SCAL* k, VEC_T(SCAL, 3) a, VEC_T(SCAL, 3) b)
+__forceinline__ __host__ __device__
+inline VEC_T(SCAL, 3) fma(const SCAL* k, VEC_T(SCAL, 3) a, VEC_T(SCAL, 3) b)
 {
 	VEC_T(SCAL, 3) c;
 	c.x = k[0] * a.x + b.x;
@@ -685,7 +714,8 @@ inline __forceinline__ __device__ __host__ VEC_T(SCAL, 3) fma(const SCAL* k, VEC
 	c.z = k[2] * a.z + b.z;
 	return c;
 }
-inline __forceinline__ __device__ __host__ VEC_T(SCAL, 4) fma(const SCAL* k, VEC_T(SCAL, 4) a, VEC_T(SCAL, 4) b)
+__forceinline__ __host__ __device__
+inline VEC_T(SCAL, 4) fma(const SCAL* k, VEC_T(SCAL, 4) a, VEC_T(SCAL, 4) b)
 {
 	VEC_T(SCAL, 4) c;
 	c.x = k[0] * a.x + b.x;
