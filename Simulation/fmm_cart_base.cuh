@@ -19,31 +19,34 @@
 
 #include "kernel.cuh"
 
-inline __host__ __device__ SCAL coeff1(int n, int m)
+__forceinline__ __host__ __device__
+inline SCAL coeff1(int n, int m)
+{
 // a coefficient used in the calculation of the gradient
 // returns (-1)^m * (2n - 2m - 2)!!
 // assumes m <= n/2 and n >= 1
 // 2n - 2m - 2 must be smaller than 80 (otherwise bad things will occur)
-{
 	return (SCAL)paritysign(m) * static_edfactorial(2 * (n - m) - 2);
 	// correct when DIM = 2, for DIM = 3 just add 1 inside dfactorial argument
 	// for DIM > 3, see Shanker, Huang, 2007
 }
 
-inline __host__ __device__ SCAL coeff2(int n, int m)
+__forceinline__ __host__ __device__
+inline SCAL coeff2(int n, int m)
+{
 // a coefficient used in the calculation of the gradient
 // returns n! / (2^m * m! * (n - 2m)!)
 // assumes m <= n/2
 // n,m,(n - 2m) must be smaller than 40
-{
 	return static_factorial(n) * inv_power_of_2(m) * inv_factorial(m) * inv_factorial(n - 2*m);
 }
 
-inline __host__ __device__ long long coeff2_accurate(int n, int m)
+__forceinline__ __host__ __device__
+inline long long coeff2_accurate(int n, int m)
+{
 // a coefficient used in the calculation of the gradient
 // returns n! / (2^m * m! * (n - 2m)!) = n! / ((2m)!! * (n - 2m)!)
 // assumes m <= n/2
-{
 	long long res = 1;
 	for (long long num = n-2*m+1, den = 2; num <= n; den += 2)
 	{
@@ -108,21 +111,24 @@ In the following calculations we will use cartesian coordinates.
 
 */
 
-constexpr __host__ __device__ int symmetricoffset(int p)
+__forceinline__ __host__ __device__
+constexpr int symmetricoffset(int p)
 {
 	return p * (p + 1) / 2;
 }
 
-constexpr __host__ __device__ int tracelessoffset(int p)
+__forceinline__ __host__ __device__
+constexpr int tracelessoffset(int p)
 {
 	return (p == 0) ? 0 : (2 * p - 1);
 }
 
-inline __host__ __device__ void trace(SCAL *__restrict__ out, const SCAL *__restrict__ in, int n, int m)
+__host__ __device__
+inline void trace(SCAL *__restrict__ out, const SCAL *__restrict__ in, int n, int m)
+{
 // contract 2m indices in n-order symmetric tensor "in" giving (n-2m)-order tensor "out"
 // assumes n >= 2m
 // if n = 2m the result is a scalar
-{
 	int n_out = n - 2 * m;
 	for (int i = 0; i <= n_out; ++i)
 	{
@@ -135,17 +141,18 @@ inline __host__ __device__ void trace(SCAL *__restrict__ out, const SCAL *__rest
 }
 
 template <typename T>
-inline __host__ __device__ void swap(T &a, T &b)
+__host__ __device__
+inline void swap(T &a, T &b)
 {
     T c(a); a = b; b = c;
 }
 
-inline __host__ __device__ void contract(SCAL *__restrict__ C, const SCAL *__restrict__ A,
-                                                               const SCAL *__restrict__ B,
-                                         int nA, int nB)
+__host__ __device__
+inline void contract(SCAL *__restrict__ C, const SCAL *__restrict__ A,
+                                           const SCAL *__restrict__ B, int nA, int nB)
+{
 // contract two symmetric tensors A, B into a symmetric tensor C of order |nA-nB|
 // if nA = nB the result is a scalar
-{
 	if (nA < nB)
 	{
 		swap(A, B);
@@ -162,12 +169,12 @@ inline __host__ __device__ void contract(SCAL *__restrict__ C, const SCAL *__res
 	}
 }
 
-inline __host__ __device__ void contract_acc(SCAL *__restrict__ C, const SCAL *__restrict__ A,
-                                                                   const SCAL *__restrict__ B,
-                                             int nA, int nB)
+__host__ __device__
+inline void contract_acc(SCAL *__restrict__ C, const SCAL *__restrict__ A,
+                                               const SCAL *__restrict__ B, int nA, int nB)
+{
 // contract two symmetric tensors A, B into a symmetric tensor of order |nA-nB|
 // and sum (accumulate) the result to C
-{
 	if (nA < nB)
 	{
 		swap(A, B);
@@ -184,12 +191,12 @@ inline __host__ __device__ void contract_acc(SCAL *__restrict__ C, const SCAL *_
 	}
 }
 
-inline __host__ __device__ void contract_ma(SCAL *__restrict__ C, const SCAL *__restrict__ A,
-                                                                  const SCAL *__restrict__ B,
-                                            SCAL c, int nA, int nB)
+__host__ __device__
+inline  void contract_ma(SCAL *__restrict__ C, const SCAL *__restrict__ A,
+                                               const SCAL *__restrict__ B, SCAL c, int nA, int nB)
+{
 // contract two symmetric tensors A, B into a symmetric tensor of order |nA-nB|
 // multiply it by a scalar c and sum (accumulate) the result to C
-{
 	if (nA < nB)
 	{
 		swap(A, B);
@@ -206,15 +213,15 @@ inline __host__ __device__ void contract_ma(SCAL *__restrict__ C, const SCAL *__
 	}
 }
 
-inline __host__ __device__ void contract_traceless_ma(SCAL *__restrict__ C, const SCAL *__restrict__ A,
-                                                                            const SCAL *__restrict__ B,
-                                                      SCAL c, int nA, int nB)
+__host__ __device__
+inline void contract_traceless_ma(SCAL *__restrict__ C, const SCAL *__restrict__ A,
+                                                        const SCAL *__restrict__ B, SCAL c, int nA, int nB)
+{
 // contract two symmetric tensors A, B into a symmetric tensor of order |nA-nB|
 // multiply it by a scalar c and sum (accumulate) the result to C
 // we can reduce complexity by knowing that the result must be traceless
 // C contains only the indipendent elements of the result, the other elements
 // will be built a posteriori through the function traceless_refine
-{
 	if (nA < nB)
 	{
 		swap(A, B);
@@ -231,14 +238,14 @@ inline __host__ __device__ void contract_traceless_ma(SCAL *__restrict__ C, cons
 	}
 }
 
-inline __host__ __device__ void contract_traceless2_ma(SCAL *__restrict__ C, const SCAL *__restrict__ A,
-                                                                             const SCAL *__restrict__ B,
-                                                       SCAL c, int nA, int nB)
+__host__ __device__
+inline void contract_traceless2_ma(SCAL *__restrict__ C, const SCAL *__restrict__ A,
+                                                         const SCAL *__restrict__ B, SCAL c, int nA, int nB)
+{
 // contract two traceless symmetric tensors A, B into a traceless symmetric tensor of order |nA-nB|
 // multiply it by a scalar c and sum (accumulate) the result to C
 // we can reduce complexity by knowing that the result must be traceless
 // C contains only the indipendent elements of the result
-{
 	if (nA < nB)
 	{
 		swap(A, B);
@@ -261,26 +268,28 @@ inline __host__ __device__ void contract_traceless2_ma(SCAL *__restrict__ C, con
 }
 
 template<typename T>
-constexpr __host__ __device__ T static_min(T a, T b)
+__forceinline__ __host__ __device__
+constexpr T static_min(T a, T b)
 {
 	return (a < b) ? a : b;
 }
 template<typename T>
-constexpr __host__ __device__ T static_max(T a, T b)
+__forceinline__ __host__ __device__
+constexpr T static_max(T a, T b)
 {
 	return (a < b) ? b : a;
 }
 
 template<int nA, int nB>
-inline __host__ __device__ void static_contract_traceless_ma(SCAL *__restrict__ C, const SCAL *__restrict__ A,
-                                                                                   const SCAL *__restrict__ B,
-                                                             SCAL c)
+__host__ __device__
+inline void static_contract_traceless_ma(SCAL *__restrict__ C, const SCAL *__restrict__ A,
+                                                               const SCAL *__restrict__ B, SCAL c)
+{
 // contract two symmetric tensors A, B into a symmetric tensor of order |nA-nB|
 // multiply it by a scalar c and sum (accumulate) the result to C
 // we can reduce complexity by knowing that the result must be traceless
 // C contains only the indipendent elements of the result, the other elements
 // may be built a posteriori through the function traceless_refine
-{
 	if (nA < nB)
 		static_contract_traceless_ma<nB, nA>(C, B, A, c);
 	else
@@ -298,14 +307,14 @@ inline __host__ __device__ void static_contract_traceless_ma(SCAL *__restrict__ 
 }
 
 template<int nA, int nB>
-inline __host__ __device__ void static_contract_traceless2_ma(SCAL *__restrict__ C, const SCAL *__restrict__ A,
-                                                                                    const SCAL *__restrict__ B,
-                                                              SCAL c)
+__host__ __device__
+inline void static_contract_traceless2_ma(SCAL *__restrict__ C, const SCAL *__restrict__ A,
+                                                                const SCAL *__restrict__ B, SCAL c)
+{
 // contract two traceless symmetric tensors A, B into a traceless symmetric tensor of order |nA-nB|
 // multiply it by a scalar c and sum (accumulate) the result to C
 // we can reduce complexity by knowing that the result must be traceless
 // C contains only the indipendent elements of the result
-{
 	if (nA < nB)
 		static_contract_traceless2_ma<nB, nA>(C, B, A, c);
 	else
@@ -327,28 +336,31 @@ inline __host__ __device__ void static_contract_traceless2_ma(SCAL *__restrict__
 	}
 }
 
-inline __host__ __device__ void traceless_refine(SCAL *A, int n)
-// build a traceless tensor from the first 2 elements
+__host__ __device__
+inline void traceless_refine(SCAL *A, int n)
 {
+// build a traceless tensor from the first 2 elements
 	for (int i = 2; i <= n; ++i)
 		A[i] = -A[i-2];
 }
 
 template<int n>
-inline __host__ __device__ void static_traceless_refine(SCAL *A)
-// build a traceless tensor from the first 2 elements
+__host__ __device__
+inline void static_traceless_refine(SCAL *A)
 {
+// build a traceless tensor from the first 2 elements
 	for (int i = 2; i <= n; ++i)
 		A[i] = -A[i-2];
 }
 
-inline __host__ __device__ void gradient_exact(SCAL *grad, int n, VEC d, SCAL r2)
+__host__ __device__
+inline void gradient_exact(SCAL *grad, int n, VEC d, SCAL r2)
+{
 // calculate the gradient of -log(r) of order n i.e. -nabla^n log(r), which is a n-order symmetric tensor.
 // NOTE that if r2 >> EPS2, it is also totally traceless, so it has just 2 independent elements
 // for n >= 1 (just 1 for n = 0)
 // r2 = r^2 = dot(d,d) + EPS2
 // this version works even for big EPS2, in which case the gradient is not traceless
-{
 	if (n == 0)
 		grad[0] = -(SCAL)0.5*log(r2); // -log(r) = -log(sqrt(r^2)) = -0.5 * log(r^2)
 	else
@@ -370,14 +382,15 @@ inline __host__ __device__ void gradient_exact(SCAL *grad, int n, VEC d, SCAL r2
 	}
 }
 
-inline __host__ __device__ void gradient(SCAL *grad, int n, VEC d, SCAL r)
+__host__ __device__
+inline void gradient(SCAL *grad, int n, VEC d, SCAL r)
+{
 // calculate the gradient of -log(r) of order n i.e. -nabla^n log(r), which is a n-order symmetric tensor.
 // NOTE that if r2 >> EPS2, it is also totally traceless, so it has just 2 independent elements
 // for n >= 1 (just 1 for n = 0)
 // r is the distance, d is the unit vector
 // this version assumes r2 >> EPS2 which ease the computation significantly (from O(n^3) to O(n))
 // if this assumption does not hold, accuracy will be reduced
-{
 	if (n == 0)
 		grad[0] = -log(r);
 	else
@@ -395,14 +408,15 @@ inline __host__ __device__ void gradient(SCAL *grad, int n, VEC d, SCAL r)
 }
 
 template<int n>
-inline __host__ __device__ void static_gradient(SCAL *grad, VEC d, SCAL r)
+__host__ __device__
+inline void static_gradient(SCAL *grad, VEC d, SCAL r)
+{
 // calculate the gradient of -log(r) of order n i.e. -nabla^n log(r), which is a n-order symmetric tensor.
 // NOTE that if r2 >> EPS2, it is also totally traceless, so it has just 2 independent elements
 // for n >= 1 (just 1 for n = 0)
 // r is the distance, d is the unit vector
 // this version assumes r2 >> EPS2 which ease the computation significantly (from O(n^3) to O(n))
 // if this assumption does not hold, accuracy will be reduced
-{
 	if (n == 0)
 		grad[0] = -log(r);
 	else
@@ -419,21 +433,23 @@ inline __host__ __device__ void static_gradient(SCAL *grad, VEC d, SCAL r)
 	}
 }
 
-inline __host__ __device__ void tensorpow(SCAL *power, int n, VEC d)
+__host__ __device__
+inline void tensorpow(SCAL *power, int n, VEC d)
+{
 // calculate the powers tensor of d of order n, e.g.:
 // r^(0) = 1
 // r^(1) = (x, y)
 // r^(2) = (x^2, xy, y^2)
 // r^(3) = (x^3, x^2 y, xy^2, y^3)
 // etc...
-{
 	for (int i = 0; i <= n; ++i)
 		power[i] = binarypow(d.y, i) * binarypow(d.x, n - i);
 }
 
-inline __host__ __device__ void tracelesspow(SCAL *power, int n, VEC d, SCAL r)
-// r is the distance, d is the unit vector
+__host__ __device__
+inline void tracelesspow(SCAL *power, int n, VEC d, SCAL r)
 {
+// r is the distance, d is the unit vector
 	if (n == 0)
 		power[0] = (SCAL)1;
 	else
@@ -450,28 +466,31 @@ inline __host__ __device__ void tracelesspow(SCAL *power, int n, VEC d, SCAL r)
 	}
 }
 
-inline __host__ __device__ void p2m(SCAL *M, int n, VEC d)
+__host__ __device__
+inline void p2m(SCAL *M, int n, VEC d)
+{
 // particle to multipole expansion of order n
 // d is the coordinate of the particle from the (near) expansion center
-{
 	SCAL C = (SCAL)paritysign(n) * (SCAL)inv_factorial(n);
 	for (int i = 0; i <= n; ++i)
 		M[i] = C * binarypow(d.y, i) * binarypow(d.x, n - i);
 }
 
-inline __host__ __device__ void p2m_acc(SCAL *M, int n, VEC d)
+__host__ __device__
+inline void p2m_acc(SCAL *M, int n, VEC d)
+{
 // particle to multipole expansion of order n + accumulate to M
 // d is the coordinate of the particle from the (near) expansion center
-{
 	SCAL C = (SCAL)paritysign(n) * (SCAL)inv_factorial(n);
 	for (int i = 0; i <= n; ++i)
 		M[i] += C * binarypow(d.y, i) * binarypow(d.x, n - i);
 }
 
-inline __host__ __device__ void p2m_traceless_acc(SCAL *M, int n, VEC d, SCAL r)
+__host__ __device__
+inline void p2m_traceless_acc(SCAL *M, int n, VEC d, SCAL r)
+{
 // particle to multipole expansion of order n + accumulate to M
 // d is the unit vector of the coordinate of the particle from the (near) expansion center
-{
 	if (n == 0)
 		M[0] += (SCAL)1;
 	else
@@ -488,10 +507,11 @@ inline __host__ __device__ void p2m_traceless_acc(SCAL *M, int n, VEC d, SCAL r)
 	}
 }
 
-inline __host__ __device__ void p2l(SCAL *L, int n, VEC d, SCAL r)
+__host__ __device__
+inline void p2l(SCAL *L, int n, VEC d, SCAL r)
+{
 // particle to local expansion of order n
 // d is the unit vector of the coordinate of the particle from the (far) expansion center
-{
 	gradient(L, n, d, r);
 	SCAL C = (SCAL)paritysign(n) * (SCAL)inv_factorial(n);
 	for (int i = 0; i <= 1; ++i)
@@ -499,12 +519,13 @@ inline __host__ __device__ void p2l(SCAL *L, int n, VEC d, SCAL r)
 	traceless_refine(L, n);
 }
 
-inline __host__ __device__ void m2m(SCAL *__restrict__ Mout, const SCAL *__restrict__ Mtuple, int n, VEC d)
+__host__ __device__
+inline void m2m(SCAL *__restrict__ Mout, const SCAL *__restrict__ Mtuple, int n, VEC d)
+{
 // multipole to multipole expansion
 // Mtuple is a tuple of multipole tensors of orders from 0 to n (inclusive)
 // returns a multipole tensor of order n
 // d is the shift from the old position to the new position
-{
 	for (int i = 0; i <= n; ++i)
 	{
 		int j = n-i;
@@ -524,12 +545,13 @@ inline __host__ __device__ void m2m(SCAL *__restrict__ Mout, const SCAL *__restr
 	}
 }
 
-inline __host__ __device__ void m2m_acc(SCAL *__restrict__ Mout, const SCAL *__restrict__ Mtuple, int n, VEC d)
+__host__ __device__
+inline void m2m_acc(SCAL *__restrict__ Mout, const SCAL *__restrict__ Mtuple, int n, VEC d)
+{
 // multipole to multipole expansion + accumulate
 // Mtuple is a tuple of multipole tensors of orders from 0 to n (inclusive)
 // returns a multipole tensor of order n
 // d is the shift from the old position to the new position
-{
 	for (int i = 0; i <= n; ++i)
 	{
 		int j = n-i;
@@ -550,13 +572,13 @@ inline __host__ __device__ void m2m_acc(SCAL *__restrict__ Mout, const SCAL *__r
 	}
 }
 
-inline __host__ __device__ void m2m_traceless_wrong_acc(SCAL *__restrict__ Mout,
-												  const SCAL *__restrict__ Mtuple, int n, VEC d, SCAL r)
+__host__ __device__
+inline void m2m_traceless_wrong_acc(SCAL *__restrict__ Mout, const SCAL *__restrict__ Mtuple, int n, VEC d, SCAL r)
+{
 // multipole to multipole expansion + accumulate
 // Mtuple is a tuple of multipole tensors of orders from 0 to n (inclusive)
 // returns a multipole tensor of order n
 // d is the (unit vector) shift from the old position to the new position
-{
 	const SCAL *Mo = Mtuple + tracelessoffset(n);
 	SCAL power[2];
 	SCAL t[2]{};
@@ -582,14 +604,14 @@ inline __host__ __device__ void m2m_traceless_wrong_acc(SCAL *__restrict__ Mout,
 		Mout[i] += t[i];
 }
 
-inline __host__ __device__ void m2m_traceless_acc(SCAL *__restrict__ Mout, SCAL *__restrict__ temp,
-												  const SCAL *__restrict__ Mtuple, int n, VEC d, SCAL r)
+__host__ __device__
+inline void m2m_traceless_acc(SCAL *__restrict__ Mout, SCAL *__restrict__ temp, const SCAL *__restrict__ Mtuple, int n, VEC d, SCAL r)
+{
 // multipole to multipole expansion + accumulate
 // Mtuple is a tuple of multipole tensors of orders from 0 to n (inclusive)
 // returns a multipole tensor of order n
 // d is the (unit vector) shift from the old position to the new position
 // temp is a temporary memory that needs at least n+1 elements (independent for each thread)
-{
 	if (n == 0)
 		Mout[0] += Mtuple[0];
 	else
@@ -663,14 +685,15 @@ inline __host__ __device__ void m2m_traceless_acc(SCAL *__restrict__ Mout, SCAL 
 	}
 }
 
-inline __host__ __device__ void m2l(SCAL *__restrict__ Ltuple, SCAL *__restrict__ temp,
-									const SCAL *__restrict__ Mtuple, int nM, int nL, VEC d, SCAL r2)
+__host__ __device__
+inline void m2l(SCAL *__restrict__ Ltuple, SCAL *__restrict__ temp,
+                const SCAL *__restrict__ Mtuple, int nM, int nL, VEC d, SCAL r2)
+{
 // multipole to local expansion
 // Mtuple is a tuple of multipole tensors of orders from 0 to nM (inclusive)
 // returns a tuple of local expansion tensors of orders from 0 to nL (inclusive)
 // d is the position of the local expansion (L) w.r.t. the multipole (M)
 // temp is a temporary memory that needs at least nM+2 elements (independent for each thread)
-{
 	r2 = sqrt(r2);
 	d /= r2;
 	for (int i = 0; i < tracelessoffset(nL+1); ++i)
@@ -688,15 +711,15 @@ inline __host__ __device__ void m2l(SCAL *__restrict__ Ltuple, SCAL *__restrict_
 	}
 }
 
-inline __host__ __device__ void m2l_acc(SCAL *__restrict__ Ltuple, SCAL *__restrict__ temp,
-										const SCAL *__restrict__ Mtuple, int nM, int nL, VEC d, SCAL r2,
-										int minm = 0)
+__host__ __device__
+inline void m2l_acc(SCAL *__restrict__ Ltuple, SCAL *__restrict__ temp,
+                    const SCAL *__restrict__ Mtuple, int nM, int nL, VEC d, SCAL r2, int minm = 0)
+{
 // multipole to local expansion + accumulate
 // Mtuple is a tuple of multipole tensors of orders from 0 to nM (inclusive)
 // returns a tuple of local expansion tensors of orders from 0 to nL (inclusive)
 // d is the position of the local expansion (L) w.r.t. the multipole (M)
 // temp is a temporary memory that needs at least nM+2 elements (independent for each thread)
-{
 	r2 = sqrt(r2);
 	d /= r2;
 	for (int m = minm; m <= nM+nL; ++m)
@@ -712,13 +735,14 @@ inline __host__ __device__ void m2l_acc(SCAL *__restrict__ Ltuple, SCAL *__restr
 	}
 }
 
-inline __host__ __device__ void m2l_traceless_acc(SCAL *__restrict__ Ltuple, const SCAL *__restrict__ Mtuple,
-												  int nM, int nL, VEC d, SCAL r2, int minm = 0)
+__host__ __device__
+inline void m2l_traceless_acc(SCAL *__restrict__ Ltuple, const SCAL *__restrict__ Mtuple,
+                              int nM, int nL, VEC d, SCAL r2, int minm = 0)
+{
 // multipole to local expansion + accumulate
 // Mtuple is a tuple of multipole tensors of orders from 0 to nM (inclusive)
 // returns a tuple of local expansion tensors of orders from 0 to nL (inclusive)
 // d is the position of the local expansion (L) w.r.t. the multipole (M)
-{
 	SCAL grad[2];
 	r2 = sqrt(r2);
 	d /= r2;
@@ -735,13 +759,15 @@ inline __host__ __device__ void m2l_traceless_acc(SCAL *__restrict__ Ltuple, con
 }
 
 template<int n, int nmax, int m, bool traceless>
-inline __host__ __device__ typename std::enable_if<(n > nmax), void>::type
+__host__ __device__
+inline typename std::enable_if<(n > nmax), void>::type
 	static_m2l_inner2(SCAL *, const SCAL *, const SCAL *)
 {
 
 }
 template<int n, int nmax, int m, bool traceless>
-inline __host__ __device__ typename std::enable_if<(n <= nmax), void>::type
+__host__ __device__
+inline typename std::enable_if<(n <= nmax), void>::type
 	static_m2l_inner2(SCAL *__restrict__ Ltuple, const SCAL *__restrict__ grad, const SCAL *__restrict__ Mtuple)
 {
 	constexpr int mn = m-n; // 0 <= mn <= nM
@@ -755,13 +781,15 @@ inline __host__ __device__ typename std::enable_if<(n <= nmax), void>::type
 }
 
 template<int m, int N, bool traceless>
-inline __host__ __device__ typename std::enable_if<(m > 2*N), void>::type
+__host__ __device__
+inline typename std::enable_if<(m > 2*N), void>::type
 	static_m2l_inner(SCAL *, SCAL *, const SCAL *, VEC, SCAL)
 {
 	
 }
 template<int m, int N, bool traceless>
-inline __host__ __device__ typename std::enable_if<(m <= 2*N), void>::type
+__host__ __device__
+inline typename std::enable_if<(m <= 2*N), void>::type
 	static_m2l_inner(SCAL *__restrict__ Ltuple, SCAL *__restrict__ grad,
 					 const SCAL *__restrict__ Mtuple, VEC d, SCAL r)
 {
@@ -774,13 +802,15 @@ inline __host__ __device__ typename std::enable_if<(m <= 2*N), void>::type
 }
 
 template<int n, int N>
-inline __host__ __device__ typename std::enable_if<(n > N), void>::type
+__host__ __device__
+inline typename std::enable_if<(n > N), void>::type
 	static_m2l_refine(SCAL *)
 {
 	
 }
 template<int n, int N>
-inline __host__ __device__ typename std::enable_if<(n <= N), void>::type
+__host__ __device__
+inline typename std::enable_if<(n <= N), void>::type
 	static_m2l_refine(SCAL *Ltuple)
 {
 	static_traceless_refine<n>(Ltuple + symmetricoffset(n));
@@ -789,8 +819,9 @@ inline __host__ __device__ typename std::enable_if<(n <= N), void>::type
 }
 
 template<int N, int minm>
-inline __host__ __device__ void static_m2l_acc_(SCAL *__restrict__ Ltuple, SCAL *__restrict__ grad,
-												const SCAL *__restrict__ Mtuple, VEC d, SCAL r2)
+__host__ __device__
+inline void static_m2l_acc_(SCAL *__restrict__ Ltuple, SCAL *__restrict__ grad,
+                            const SCAL *__restrict__ Mtuple, VEC d, SCAL r2)
 {
 	r2 = sqrt(r2);
 	d /= r2;
@@ -798,8 +829,8 @@ inline __host__ __device__ void static_m2l_acc_(SCAL *__restrict__ Ltuple, SCAL 
 }
 
 template<int N, int minm>
-inline __host__ __device__ void static_m2l_traceless_acc_(SCAL *__restrict__ Ltuple,
-														  const SCAL *__restrict__ Mtuple, VEC d, SCAL r2)
+__host__ __device__
+inline void static_m2l_traceless_acc_(SCAL *__restrict__ Ltuple, const SCAL *__restrict__ Mtuple, VEC d, SCAL r2)
 {
 	SCAL grad[2];
 	r2 = sqrt(r2);
@@ -808,13 +839,14 @@ inline __host__ __device__ void static_m2l_traceless_acc_(SCAL *__restrict__ Ltu
 }
 
 template<int minm = 0>
-inline __host__ __device__ void static_m2l_acc(SCAL *__restrict__ Ltuple, SCAL *__restrict__ temp,
-											   const SCAL *__restrict__ Mtuple, int N, VEC d, SCAL r2)
+__host__ __device__
+inline void static_m2l_acc(SCAL *__restrict__ Ltuple, SCAL *__restrict__ temp,
+                           const SCAL *__restrict__ Mtuple, int N, VEC d, SCAL r2)
+{
 // multipole to local expansion + accumulate
 // Mtuple is a tuple of multipole tensors of orders from 0 to nM (inclusive)
 // returns a tuple of local expansion tensors of orders from 0 to nL (inclusive)
 // d is the position of the local expansion (L) w.r.t. the multipole (M)
-{
 	switch (N)
 	{
 		case 0:
@@ -871,14 +903,15 @@ inline __host__ __device__ void static_m2l_acc(SCAL *__restrict__ Ltuple, SCAL *
 	}
 }
 
-inline __host__ __device__ void l2l(SCAL *__restrict__ Lout, SCAL *__restrict__ temp,
-									const SCAL *__restrict__ Ltuple, int n, int nL, VEC d)
+__host__ __device__
+inline void l2l(SCAL *__restrict__ Lout, SCAL *__restrict__ temp,
+                const SCAL *__restrict__ Ltuple, int n, int nL, VEC d)
+{
 // local to local expansion
 // Ltuple is a tuple of local expansion tensors of orders from 0 to nL (inclusive)
 // returns a local expansion tensor of order n
 // d is the shift from the old position to the new position
 // temp is a temporary memory that needs at least nL-n+1 elements (independent for each thread)
-{
 	for (int i = 0; i <= n; ++i)
 		Lout[i] = (SCAL)0;
 	for (int m = n; m <= nL; ++m)
@@ -891,14 +924,15 @@ inline __host__ __device__ void l2l(SCAL *__restrict__ Lout, SCAL *__restrict__ 
 	}
 }
 
-inline __host__ __device__ void l2l_acc(SCAL *__restrict__ Lout, SCAL *__restrict__ temp,
-										const SCAL *__restrict__ Ltuple, int n, int nL, VEC d)
+__host__ __device__
+inline void l2l_acc(SCAL *__restrict__ Lout, SCAL *__restrict__ temp,
+                    const SCAL *__restrict__ Ltuple, int n, int nL, VEC d)
+{
 // local to local expansion + accumulate
 // Ltuple is a tuple of local expansion tensors of orders from 0 to nL (inclusive)
 // returns a local expansion tensor of order n
 // d is the shift from the old position to the new position
 // temp is a temporary memory that needs at least nL-n+1 elements (independent for each thread)
-{
 	for (int m = n; m <= nL; ++m)
 	{
 		int mn = m-n;
@@ -909,13 +943,14 @@ inline __host__ __device__ void l2l_acc(SCAL *__restrict__ Lout, SCAL *__restric
 	}
 }
 
-inline __host__ __device__ void l2l_traceless_acc(SCAL *__restrict__ Lout, const SCAL *__restrict__ Ltuple,
-												  int n, int nL, VEC d, SCAL r)
+__host__ __device__
+inline void l2l_traceless_acc(SCAL *__restrict__ Lout, const SCAL *__restrict__ Ltuple,
+                              int n, int nL, VEC d, SCAL r)
+{
 // local to local expansion + accumulate
 // Ltuple is a tuple of local expansion tensors of orders from 0 to nL (inclusive)
 // returns a local expansion tensor of order n
 // d is the shift from the old position to the new position
-{
 	SCAL power[2];
 	for (int m = n; m <= nL; ++m)
 	{
@@ -926,13 +961,13 @@ inline __host__ __device__ void l2l_traceless_acc(SCAL *__restrict__ Lout, const
 	}
 }
 
-inline __host__ __device__ SCAL m2p_pot(SCAL *__restrict__ temp, const SCAL *__restrict__ Mtuple,
-										int nM, VEC d, SCAL r2)
+__host__ __device__
+inline SCAL m2p_pot(SCAL *__restrict__ temp, const SCAL *__restrict__ Mtuple, int nM, VEC d, SCAL r2)
+{
 // multipole to particle expansion (for potential)
 // Mtuple is a tuple of multipole tensors of orders from 0 to nM (inclusive)
 // returns the potential evaluated at distance d from the expansion center
 // temp is a temporary memory that needs at least nM+2 elements (independent for each thread)
-{
 	SCAL pot(0);
 	r2 = sqrt(r2);
 	for (int n = 0; n <= nM; ++n)
@@ -944,13 +979,13 @@ inline __host__ __device__ SCAL m2p_pot(SCAL *__restrict__ temp, const SCAL *__r
 	return pot;
 }
 
-inline __host__ __device__ SCAL l2p_pot(SCAL *__restrict__ temp, const SCAL *__restrict__ Ltuple,
-										int nL, VEC d)
+__host__ __device__
+inline SCAL l2p_pot(SCAL *__restrict__ temp, const SCAL *__restrict__ Ltuple, int nL, VEC d)
+{
 // local to particle expansion (for potential)
 // Ltuple is a tuple of local expansion tensors of orders from 0 to nL (inclusive)
 // returns the potential evaluated at distance d from the expansion center
 // temp is a temporary memory that needs at least nL+2 elements (independent for each thread)
-{
 	SCAL pot(0);
 	for (int n = 0; n <= nL; ++n)
 	{
@@ -961,13 +996,13 @@ inline __host__ __device__ SCAL l2p_pot(SCAL *__restrict__ temp, const SCAL *__r
 	return pot;
 }
 
-inline __host__ __device__ VEC m2p_field(SCAL *__restrict__ temp, const SCAL *__restrict__ Mtuple,
-										 int nM, VEC d, SCAL r2)
+__host__ __device__
+inline VEC m2p_field(SCAL *__restrict__ temp, const SCAL *__restrict__ Mtuple, int nM, VEC d, SCAL r2)
+{
 // multipole to particle expansion (for field)
 // Mtuple is a tuple of multipole tensors of orders from 0 to nM (inclusive)
 // returns the field evaluated at distance d from the expansion center
 // temp is a temporary memory that needs at least nM+4 elements (independent for each thread)
-{
 	VEC field{};
 	r2 = sqrt(r2);
 	for (int n = 0; n <= nM; ++n)
@@ -980,13 +1015,13 @@ inline __host__ __device__ VEC m2p_field(SCAL *__restrict__ temp, const SCAL *__
 	return field;
 }
 
-inline __host__ __device__ VEC l2p_field(SCAL *__restrict__ temp, const SCAL *__restrict__ Ltuple,
-										 int nL, VEC d)
+__host__ __device__
+inline VEC l2p_field(SCAL *__restrict__ temp, const SCAL *__restrict__ Ltuple, int nL, VEC d)
+{
 // local to particle expansion (for field)
 // Ltuple is a tuple of local expansion tensors of orders from 0 to nL (inclusive)
 // returns the field evaluated at distance d from the expansion center
 // temp is a temporary memory that needs at least nL+2 elements (independent for each thread)
-{
 	VEC field{};
 	for (int n = 1; n <= nL; ++n)
 	{
@@ -999,12 +1034,13 @@ inline __host__ __device__ VEC l2p_field(SCAL *__restrict__ temp, const SCAL *__
 	return field;
 }
 
-inline __host__ __device__ VEC l2p_traceless_field(const SCAL *Ltuple, int nL, VEC d, SCAL r)
+__host__ __device__
+inline VEC l2p_traceless_field(const SCAL *Ltuple, int nL, VEC d, SCAL r)
+{
 // local to particle expansion (for field)
 // Ltuple is a tuple of local expansion tensors of orders from 0 to nL (inclusive)
 // returns the field evaluated at distance d from the expansion center
 // d is a unit vector
-{
 	SCAL power[2], temp[2];
 	for (int i = 0; i < 2; ++i)
 		temp[i] = (SCAL)0;

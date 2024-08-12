@@ -867,25 +867,32 @@ inline void gradient_coalesced3(SCAL *grad, int n, VEC d, SCAL r, int tid, int b
 	}
 	else
 	{
+		SCAL x2 = d.x*d.x, y2 = d.y*d.y;
 		SCAL C = (SCAL)paritysign(n) * binarypow(r, -n-1) * c;
+		SCAL powx, powy, powz;
 		int nelems = tracelesselems3(n);
 		for (int i = tid; i < nelems; i += bdim)
 		{
 			int z = traceless_z_i(i, n);
 			int x = traceless_x_i(i, n, z);
 			int y = n-x-z;
+			powz = z ? d.z : SCAL(1);
+			powx = (x & 1) ? d.x : SCAL(1);
 			SCAL t1(0), t2;
-			for (int k1 = 0; k1 <= x/2; ++k1)
+			for (int k1 = x/2; k1 >= 0; --k1)
 			{
 				t2 = 0;
-				for (int k2 = 0; k2 <= y/2; ++k2)
+				powy = (y & 1) ? d.y : SCAL(1);
+				for (int k2 = y/2; k2 >= 0; --k2)
 				{
 					int m = k1+k2;
-					t2 += coeff13(n, m) * coeff2(y, k2) * binarypow(d.y, y - 2*k2);
+					t2 += coeff13(n, m) * coeff2(y, k2) * powy;
+					powy *= y2;
 				}
-				t1 += t2 * coeff2(x, k1) * binarypow(d.x, x - 2*k1);
+				t1 += t2 * coeff2(x, k1) * powx;
+				powx *= x2;
 			}
-			grad[i] = C * t1 * binarypow(d.z, z);
+			grad[i] = C * t1 * powz;
 		}
 	}
 }
@@ -948,6 +955,45 @@ inline void static_gradient3(SCAL *grad, VEC d, SCAL r, SCAL c = 1)
 		}
 	}
 }
+
+/*template <unsigned n, unsigned bdim>
+__device__
+inline void static_gradient_coalesced3(SCAL *grad, VEC d, SCAL r, unsigned tid, SCAL c = 1)
+{
+// calculate the gradient of 1/r of order n i.e. nabla^n 1/r, which is a n-order symmetric tensor.
+// r is the distance, d is the unit vector
+// this version assumes r2 >> EPS2 which ease the computation significantly (from O(n^5) to O(n^3))
+// if this assumption does not hold, accuracy will be reduced
+// O(n^3)
+	if constexpr (n == 0)
+	{
+		if (tid == 0)
+			grad[0] = c/r;
+	}
+	else
+	{
+		SCAL C = (SCAL)paritysign(n) * binarypow(r, -n-1) * c;
+		constexpr unsigned nelems = tracelesselems3(n);
+		for (unsigned i = tid; i < nelems; i += bdim)
+		{
+			int z = traceless_z_i(i, n);
+			int x = traceless_x_i(i, n, z);
+			int y = n-x-z;
+			SCAL t1(0), t2;
+			for (int k1 = 0; k1 <= x/2; ++k1)
+			{
+				t2 = 0;
+				for (int k2 = 0; k2 <= y/2; ++k2)
+				{
+					int m = k1+k2;
+					t2 += coeff13(n, m) * coeff2(y, k2) * binarypow(d.y, y - 2*k2);
+				}
+				t1 += t2 * coeff2(x, k1) * binarypow(d.x, x - 2*k1);
+			}
+			grad[i] = C * t1 * binarypow(d.z, z);
+		}
+	}
+}*/
 
 __host__ __device__
 inline void tensorpow3(SCAL *power, int n, VEC d)
