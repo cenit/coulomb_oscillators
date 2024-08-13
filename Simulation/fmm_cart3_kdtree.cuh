@@ -170,8 +170,8 @@ void evalBox_cpu(fmmTree_kd tree, const ALIGNED_VEC *__restrict__ p, int n, int 
 }
 
 __device__
-inline void evalKeys_kdtree_krnl(float *keys, const int *splitdim, const ALIGNED_VEC *__restrict__ p, int n,
-                                            int l, int begi, int endi, int stride)
+inline void evalKeys_kdtree_krnl(float *keys, const int *__restrict__ splitdim, const ALIGNED_VEC *__restrict__ p, int n,
+                                 int l, int begi, int endi, int stride)
 {
 // calculate keys for all particles at level l
 	long long m = kd_n(l);
@@ -179,7 +179,7 @@ inline void evalKeys_kdtree_krnl(float *keys, const int *splitdim, const ALIGNED
 		keys[i] = (float)get_axis(aligned_load(p[i]), splitdim[m * i / n]);
 }
 
-inline void evalKeys_kdtree_cpu_krnl(unsigned long long *keys, const int *splitdim, const ALIGNED_VEC *__restrict__ p, long long n,
+inline void evalKeys_kdtree_cpu_krnl(unsigned long long *keys, const int *__restrict__ splitdim, const ALIGNED_VEC *__restrict__ p, long long n,
                                      int l, int precision, int begi, int endi, int stride)
 {
 // calculate keys for all particles at level l
@@ -201,12 +201,12 @@ inline void evalKeys_kdtree_cpu_krnl(unsigned long long *keys, const int *splitd
 	}
 }
 
-__global__ void evalKeys_kdtree(float *keys, const int *splitdim, const ALIGNED_VEC *__restrict__ p, int n, int l)
+__global__ void evalKeys_kdtree(float *keys, const int *__restrict__ splitdim, const ALIGNED_VEC *__restrict__ p, int n, int l)
 {
 	evalKeys_kdtree_krnl(keys, splitdim, p, n, l, blockDim.x * blockIdx.x + threadIdx.x, n, gridDim.x * blockDim.x);
 }
 
-void evalKeys_kdtree_cpu(unsigned long long *keys, const int *splitdim, const ALIGNED_VEC *__restrict__ p, int n, int l, int precision = 32)
+void evalKeys_kdtree_cpu(unsigned long long *keys, const int *__restrict__ splitdim, const ALIGNED_VEC *__restrict__ p, int n, int l, int precision = 32)
 {
 	std::vector<std::thread> threads(CPU_THREADS);
 	int niter = (n-1)/CPU_THREADS+1;
@@ -457,7 +457,8 @@ __constant__ const int2 init_stack18[] = {
 
 template <bool b_m2l_first = true>
 __global__
-void fmm_dualTraversal(fmmTree_kd tree, int2 *p2p_list, int2 *m2l_list, int2 *stack, int *p2p_n, int *m2l_n,
+void fmm_dualTraversal(fmmTree_kd tree, int2 *__restrict__ p2p_list, int2 *__restrict__ m2l_list, int2 *__restrict__ stack,
+                       int *__restrict__ p2p_n, int *__restrict__ m2l_n,
                        int p2p_max, int m2l_max, int stack_max, SCAL r, int L)
 {
 // call with CUDA gridsize = 1, 3, 7, 15 or 18
@@ -470,7 +471,7 @@ void fmm_dualTraversal(fmmTree_kd tree, int2 *p2p_list, int2 *m2l_list, int2 *st
 
 	int ntot = kd_ntot(L), max_top = 1;
 	int stack_size = stack_max/gdim;
-	int2 *block_stack = stack + stack_size*bid;
+	int2 *__restrict__ block_stack = stack + stack_size*bid;
 
 	int2 np;
 
@@ -712,7 +713,7 @@ void fmm_c2c3_kdtree(fmmTree_kd tree, const int2 *__restrict__ m2l_list, const i
 }
 
 __global__
-void fmm_c2c3_kdtree2(fmmTree_kd tree, const int2 *m2l_list, const int *m2l_n, SCAL d_EPS2)
+void fmm_c2c3_kdtree2(fmmTree_kd tree, const int2 *__restrict__ m2l_list, const int *__restrict__ m2l_n, SCAL d_EPS2)
 {
 // cell to cell interaction
 	extern __shared__ SCAL smems[]; // (p+1)*(p+2)/2
@@ -746,7 +747,7 @@ void fmm_c2c3_kdtree2(fmmTree_kd tree, const int2 *m2l_list, const int *m2l_n, S
 }
 
 __global__
-void fmm_c2c3_kdtree_coalesced(fmmTree_kd tree, const int2 *m2l_list, const int *m2l_n, SCAL d_EPS2)
+void fmm_c2c3_kdtree_coalesced(fmmTree_kd tree, const int2 *__restrict__ m2l_list, const int *__restrict__ m2l_n, SCAL d_EPS2)
 {
 // cell to cell interaction
 	int tempsize = symmetricoffset3(tree.p+1);
@@ -826,7 +827,8 @@ void fmm_c2c3_kdtree_coalesced(fmmTree_kd tree, const int2 *m2l_list, const int 
 	}
 }
 
-void fmm_c2c3_kdtree_cpu_thread(fmmTree_kd tree, const int2 *m2l_list, SCAL d_EPS2, int begi, int endi, int stride, SCAL *tempi)
+void fmm_c2c3_kdtree_cpu_thread(fmmTree_kd tree, const int2 *__restrict__ m2l_list, SCAL d_EPS2,
+                                int begi, int endi, int stride, SCAL *__restrict__ tempi)
 {
 // cell to cell interaction
 	int offM = symmetricoffset3(tree.p);
@@ -851,7 +853,7 @@ void fmm_c2c3_kdtree_cpu_thread(fmmTree_kd tree, const int2 *m2l_list, SCAL d_EP
 	}
 }
 
-void fmm_c2c3_kdtree_cpu(fmmTree_kd tree, const int2 *m2l_list, const int *m2l_n, SCAL d_EPS2)
+void fmm_c2c3_kdtree_cpu(fmmTree_kd tree, const int2 *__restrict__ m2l_list, const int *__restrict__ m2l_n, SCAL d_EPS2)
 {
 	std::vector<std::thread> threads(CPU_THREADS);
 	std::vector<SCAL*> temp(CPU_THREADS);
@@ -976,7 +978,7 @@ inline void fmm_p2p3_kdtree_krnl(ALIGNED_VEC *__restrict__ a, const fmmTree_kd t
 
 __global__
 void fmm_p2p3_kdtree_coalesced(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tree, const ALIGNED_VEC *__restrict__ p,
-                               const int2 *p2p_list, const int *p2p_n, int mlt_max, SCAL d_EPS2)
+                               const int2 *__restrict__ p2p_list, const int *__restrict__ p2p_n, int mlt_max, SCAL d_EPS2)
 {
 // particle to particle interaction
 	extern __shared__ ALIGNED_VEC smem[];
@@ -1067,7 +1069,7 @@ void fmm_p2p3_kdtree_coalesced(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tre
 
 __global__
 void fmm_p2p3_kdtree_coalesced2(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tree, const ALIGNED_VEC *__restrict__ p,
-                                const int2 *p2p_list, const int *p2p_n, int mlt_max, SCAL d_EPS2)
+                                const int2 *__restrict__ p2p_list, const int *__restrict__ p2p_n, int mlt_max, SCAL d_EPS2)
 {
 // particle to particle interaction
 	extern __shared__ ALIGNED_VEC smem[]; // 2*mlt_max*sizeof(ALIGNED_VEC)
@@ -1137,7 +1139,7 @@ void fmm_p2p3_kdtree_coalesced2(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tr
 
 __global__
 void fmm_p2p3_kdtree_shuffle(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tree, const ALIGNED_VEC *__restrict__ p,
-                             const int2 *p2p_list, const int *p2p_n, int mlt_max, SCAL d_EPS2)
+                             const int2 *__restrict__ p2p_list, const int *__restrict__ p2p_n, int mlt_max, SCAL d_EPS2)
 {
 // particle to particle interaction
 	extern __shared__ ALIGNED_VEC smem[];
@@ -1238,13 +1240,13 @@ void fmm_p2p3_kdtree_shuffle(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tree,
 
 __global__
 void fmm_p2p3_kdtree(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tree, const ALIGNED_VEC *__restrict__ p,
-                     const int2 *p2p_list, const int *p2p_n, int mlt_max, SCAL d_EPS2)
+                     const int2 *__restrict__ p2p_list, const int *__restrict__ p2p_n, int mlt_max, SCAL d_EPS2)
 {
 	fmm_p2p3_kdtree_krnl(a, tree, p, p2p_list, mlt_max, d_EPS2, blockDim.x * blockIdx.x + threadIdx.x, *p2p_n, gridDim.x * blockDim.x);
 }
 
 void fmm_p2p3_kdtree_cpu(ALIGNED_VEC *__restrict__ a, const fmmTree_kd tree, const ALIGNED_VEC *__restrict__ p,
-                         const int2 *p2p_list, const int *p2p_n, int mlt_max, SCAL d_EPS2)
+                         const int2 *__restrict__ p2p_list, const int *__restrict__ p2p_n, int mlt_max, SCAL d_EPS2)
 {
 	std::vector<std::thread> threads(CPU_THREADS);
 	int niter = (*p2p_n-1)/CPU_THREADS+1;
