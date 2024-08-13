@@ -22,7 +22,7 @@
 #include "fmm_cart_base.cuh"
 
 __host__ __device__
-inline SCAL coeff13(int n, int m)
+constexpr SCAL coeff13(int n, int m)
 {
 // a coefficient used in the calculation of the gradient
 // returns (-1)^m * (2n - 2m - 1)!!
@@ -32,7 +32,7 @@ inline SCAL coeff13(int n, int m)
 }
 
 __host__ __device__
-inline SCAL dyn_coeff13(int n, int m)
+constexpr SCAL dyn_coeff13(int n, int m)
 {
 // a coefficient used in the calculation of the gradient
 // returns (-1)^m * (2n - 2m - 1)!!

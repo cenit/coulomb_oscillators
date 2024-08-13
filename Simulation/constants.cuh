@@ -160,7 +160,7 @@ struct mu
 };
 
 __host__ __device__
-inline mu magicu(unsigned d)
+constexpr mu magicu(unsigned d)
 {
 // prepare magic number and other constants for unsigned division by 'd'
 // must have 1 <= d <= 2^32 - 1
