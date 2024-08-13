@@ -52,7 +52,7 @@ bool coll = true, b_unsort = true;
 SCAL dens_inhom = 1;
 
 template <typename T>
-__forceinline__ __device__
+__device__
 inline T myAtomicAdd(T* address, T val)
 {
 	return atomicAdd(address, val);
@@ -77,13 +77,13 @@ inline double myAtomicAdd(double* address, double val)
 #endif // __CUDA_ARCH__ < 600
 
 template <typename T>
-__forceinline__ __device__
+__device__
 inline T myAtomicMin(T* address, T val)
 {
 	return atomicMin(address, val);
 }
 template <typename T>
-__forceinline__ __device__
+__device__
 inline T myAtomicMax(T* address, T val)
 {
 	return atomicMax(address, val);
@@ -115,8 +115,8 @@ inline double myAtomicMax(double* address, double val)
 		: __longlong_as_double(atomicMin((unsigned long long*)address, (unsigned long long)__double_as_longlong(val)));
 }
 
-__forceinline__ __host__ __device__
-inline uint32_t clz(uint32_t val)
+__host__ __device__
+inline unsigned clz(unsigned val)
 {
 // count leading zeros
 #ifdef __CUDA_ARCH__
@@ -126,8 +126,8 @@ inline uint32_t clz(uint32_t val)
 #endif
 }
 
-__forceinline__ __host__ __device__
-inline uint32_t bitceil(uint32_t val)
+__host__ __device__
+inline unsigned bitceil(unsigned val)
 {
 // find the smallest power of two that is equal to or greater than `val`
 // used in `fmm_p2p3_kdtree` and in `fmm_p2p3_kdtree_coalesced` inside `fmm_cart3_kdtree.cuh`
@@ -140,12 +140,12 @@ inline uint32_t bitceil(uint32_t val)
 #endif
 }
 
-__forceinline__ __host__ __device__
+__host__ __device__
 inline float reciprocal_sqrt(float x)
 {
 	return rsqrtf(x);
 }
-__forceinline__ __host__ __device__
+__host__ __device__
 inline double reciprocal_sqrt(double x)
 {
 	return rsqrt(x);
@@ -209,7 +209,7 @@ inline mu magicu(unsigned d)
 	return magu; // (magu.a was set above)
 }
 
-__forceinline__ __host__ __device__
+__host__ __device__
 inline unsigned magicdivu(unsigned x, mu magic)
 {
 // magic unsigned division
@@ -220,7 +220,7 @@ inline unsigned magicdivu(unsigned x, mu magic)
 #endif
 }
 
-__forceinline__ __host__ __device__
+__host__ __device__
 inline unsigned magicremu(unsigned x, unsigned d, mu magic)
 {
 // magic unsigned remainder

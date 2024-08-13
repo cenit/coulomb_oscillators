@@ -72,7 +72,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort =
 	}
 }
 
-__forceinline__ __device__ __host__ 
+__device__ __host__
 inline VEC aligned_load(const ALIGNED_VEC& v)
 {
 #if DIM == 3 && ALIGNED == 1
@@ -83,7 +83,7 @@ inline VEC aligned_load(const ALIGNED_VEC& v)
 #endif
 }
 
-__forceinline__ __device__ __host__
+__device__ __host__
 inline ALIGNED_VEC aligned_store(const VEC& v)
 {
 #if DIM == 3 && ALIGNED == 1

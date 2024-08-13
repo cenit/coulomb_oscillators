@@ -21,7 +21,7 @@
 
 #include "fmm_cart_base.cuh"
 
-__forceinline__ __host__ __device__
+__host__ __device__
 inline SCAL coeff13(int n, int m)
 {
 // a coefficient used in the calculation of the gradient
@@ -31,7 +31,7 @@ inline SCAL coeff13(int n, int m)
 	// for DIM > 3, see Shanker, Huang, 2007
 }
 
-__forceinline__ __host__ __device__
+__host__ __device__
 inline SCAL dyn_coeff13(int n, int m)
 {
 // a coefficient used in the calculation of the gradient
@@ -176,85 +176,85 @@ In the following calculations we will use cartesian coordinates.
 
 */
 
-__forceinline__ __host__ __device__
+__host__ __device__
 constexpr int symmetricelems3(int n)
 {
 	return (n + 1) * (n + 2) / 2;
 }
 
-__forceinline__ __host__ __device__
+__host__ __device__
 constexpr int tracelesselems3(int n)
 {
 	return 2 * n + 1;
 }
 
-__forceinline__ __host__ __device__
+__host__ __device__
 constexpr int symmetricoffset3(int p)
 {
 	return p * (p + 1) * (p + 2) / 6;
 }
 
-__forceinline__ __host__ __device__
+__host__ __device__
 constexpr int tracelessoffset3(int p)
 {
 	return p * p;
 }
 
-__forceinline__ __host__ __device__
+__host__ __device__
 inline int k_coeff(int index, int n)
 {
 	int b = 2*n+3;
 	return (b - sqrt(SCAL(b*b - 8*index))) / 2;
 }
 
-__forceinline__ __host__ __device__
+__host__ __device__
 inline int symmetric_z_i(int i, int n)
 {
 	return k_coeff(i, n);
 }
 
-__forceinline__ __host__ __device__
+__host__ __device__
 constexpr int symmetric_x_i(int i, int n, int z)
 {
 	return (n * (n + 1) - (n - z) * (n - z + 1)) / 2 + n - i;
 }
-__forceinline__ __host__ __device__
+__host__ __device__
 inline int symmetric_x_i(int i, int n)
 {
 	return symmetric_x_i(i, n, symmetric_z_i(i, n));
 }
 
-__forceinline__ __host__ __device__
+__host__ __device__
 constexpr int symmetric_i_x_z(int x, int z, int n)
 {
 	return (n * (n + 1) - (n - z) * (n - z + 1)) / 2 + n - x;
 }
 
-__forceinline__ __host__ __device__
+__host__ __device__
 constexpr int traceless_z_i(int i, int n)
 {
 	return (i >= n+1); // i div (p + 1) = 1_{j | j >= p + 1} (i)
 }
 
-__forceinline__ __host__ __device__
+__host__ __device__
 constexpr int traceless_x_i(int i, int n, int z)
 {
 	return (z + 1) * n - i;
 }
-__forceinline__ __host__ __device__
+__host__ __device__
 constexpr int traceless_x_i(int i, int n)
 {
 	return traceless_x_i(i, n, traceless_z_i(i, n));
 }
 
-__forceinline__ __host__ __device__
+__host__ __device__
 constexpr int traceless_i_x_z(int x, int z, int n)
 {
 	return (z + 1) * n - x;
 }
 
-__forceinline__ __host__ __device__
-constexpr SCAL traceless_A_x_z(const SCAL *A, int x, int z, int n)
+__host__ __device__
+constexpr SCAL traceless_A_x_z(const SCAL *__restrict__ A, int x, int z, int n)
 {
 // extract element from traceless tensor A. It's valid also for z >= 2
 	if (z >= 2)
@@ -280,7 +280,7 @@ inline void trace3(SCAL *__restrict__ out, const SCAL *__restrict__ in, int n, i
 			int j = symmetric_i_x_z(x, z, n);
 			int k_j = k_coeff(j, n);
 			const SCAL *inj = in + j;
-			const SCAL *injk;
+			const SCAL *__restrict__ injk;
 			for (int kz = 0; kz <= m; ++kz)
 			{
 				injk = inj + 2*kz*(n - k_j - kz) + kz;
@@ -313,8 +313,8 @@ inline void contract3(SCAL *__restrict__ C, const SCAL *__restrict__ A, const SC
 			SCAL t(0);
 			int ja = symmetric_i_x_z(x, z, nA);
 			int kja = k_coeff(ja, nA);
-			const SCAL *Aj = A + ja;
-			const SCAL *Ajk, *Bjk;
+			const SCAL *__restrict__ Aj = A + ja;
+			const SCAL *__restrict__ Ajk, *Bjk;
 			for (int kz = 0; kz <= nB; ++kz)
 			{
 				Ajk = Aj + kz*(nA - kja) - kz*(kz - 1)/2;
@@ -349,7 +349,7 @@ inline void contract_acc3(SCAL *__restrict__ C, const SCAL *__restrict__ A, cons
 			int ja = symmetric_i_x_z(x, z, nA);
 			int kja = k_coeff(ja, nA);
 			const SCAL *Aj = A + ja;
-			const SCAL *Ajk, *Bjk;
+			const SCAL *__restrict__ Ajk, *__restrict__ Bjk;
 			for (int kz = 0; kz <= nB; ++kz)
 			{
 				Ajk = Aj + kz*(nA - kja) - kz*(kz - 1)/2;
@@ -384,7 +384,7 @@ inline void contract_ma3(SCAL *__restrict__ C, const SCAL *__restrict__ A, const
 			int ja = symmetric_i_x_z(x, z, nA);
 			int kja = k_coeff(ja, nA);
 			const SCAL *Aj = A + ja;
-			const SCAL *Ajk, *Bjk;
+			const SCAL *__restrict__ Ajk, *__restrict__ Bjk;
 			for (int kz = 0; kz <= nB; ++kz)
 			{
 				Ajk = Aj + kz*(nA - kja) - kz*(kz - 1)/2;
@@ -428,7 +428,7 @@ inline void contract_traceless_ma3(SCAL *__restrict__ C, const SCAL *__restrict_
 			int ja = symmetric_i_x_z(x, z, nA);
 			int kja = k_coeff(ja, nA);
 			const SCAL *Aj = A + ja;
-			const SCAL *Ajk, *Bjk;
+			const SCAL *__restrict__ Ajk, *__restrict__ Bjk;
 			j = 0;
 			for (int kz = 0; kz <= nB; ++kz)
 			{
@@ -480,7 +480,7 @@ inline void contract_traceless_ma_coalesced3(SCAL *__restrict__ C, const SCAL *_
 		int ja = symmetric_i_x_z(x, z, nA);
 		int kja = k_coeff(ja, nA);
 		const SCAL *Aj = A + ja;
-		const SCAL *Ajk, *Bjk;
+		const SCAL *__restrict__ Ajk, *__restrict__ Bjk;
 		for (int kz = 0; kz <= nB; ++kz)
 		{
 			Ajk = Aj + kz*(nA - kja) - kz*(kz - 1)/2;
@@ -537,7 +537,7 @@ inline void contract_traceless_ma_coalesced_tuple3(SCAL *__restrict__ Ctuple, co
 		int ja = symmetric_i_x_z(x, z, nA);
 		int kja = k_coeff(ja, nA);
 		const SCAL *Aj = Atuple + symmetricoffset3(nA) + ja;
-		const SCAL *Ajk, *Bjk;
+		const SCAL *__restrict__ Ajk, *__restrict__ Bjk;
 		j = 0;
 		for (int kz = 0; kz <= nB; ++kz)
 		{
@@ -631,7 +631,7 @@ inline void static_contract_traceless_ma3(SCAL *__restrict__ C, const SCAL *__re
 				int ja = symmetric_i_x_z(x, z, nA);
 				int kja = k_coeff(ja, nA);
 				const SCAL *Aj = A + ja;
-				const SCAL *Ajk, *Bjk;
+				const SCAL *__restrict__ Ajk, *__restrict__ Bjk;
 				j = 0;
 #pragma unroll
 				for (int kz = 0; kz <= nB; ++kz)
@@ -732,7 +732,7 @@ inline void static_contract_traceless_ma_coalesced_tuple3(SCAL *__restrict__ Ctu
 		int ja = symmetric_i_x_z(x, z, nA);
 		int kja = k_coeff(ja, nA);
 		const SCAL *Aj = Atuple + symmetricoffset3(nA) + ja;
-		const SCAL *Ajk, *Bjk;
+		const SCAL *__restrict__ Ajk, *__restrict__ Bjk;
 		int j = 0;
 #pragma unroll
 		for (int kz = 0; kz <= nB; ++kz)
@@ -758,7 +758,7 @@ inline void static_contract_traceless_ma_coalesced_tuple3(SCAL *__restrict__ Ctu
 }
 
 __host__ __device__
-inline void traceless_refine3(SCAL *A, int n)
+inline void traceless_refine3(SCAL *__restrict__ A, int n)
 {
 // build a traceless tensor using symmetric index notation
 // O(n^2)
@@ -773,7 +773,7 @@ inline void traceless_refine3(SCAL *A, int n)
 }
 
 __device__
-inline void traceless_refine_coalesced3(SCAL *A, int n, int tid, int bdim, int mask)
+inline void traceless_refine_coalesced3(SCAL *__restrict__ A, int n, int tid, int bdim, int mask)
 {
 // build a traceless tensor using symmetric index notation
 // O(n^2)
@@ -794,7 +794,7 @@ inline void traceless_refine_coalesced3(SCAL *A, int n, int tid, int bdim, int m
 
 template<int n>
 __host__ __device__
-inline void static_traceless_refine3(SCAL *A)
+inline void static_traceless_refine3(SCAL *__restrict__ A)
 {
 // build a traceless tensor using symmetric index notation
 // O(n^2)
@@ -811,7 +811,7 @@ inline void static_traceless_refine3(SCAL *A)
 }
 
 __host__ __device__
-inline void gradient_exact3(SCAL *grad, int n, VEC d, SCAL r)
+inline void gradient_exact3(SCAL *__restrict__ grad, int n, VEC d, SCAL r)
 {
 // calculate the gradient of 1/r of order n i.e. nabla^n 1/r, which is a n-order symmetric tensor.
 // r is the distance, d is the unit vector
@@ -849,7 +849,7 @@ inline void gradient_exact3(SCAL *grad, int n, VEC d, SCAL r)
 }
 
 __host__ __device__
-inline void gradient3(SCAL *grad, int n, VEC d, SCAL r, SCAL c = 1)
+inline void gradient3(SCAL *__restrict__ grad, int n, VEC d, SCAL r, SCAL c = 1)
 {
 // calculate the gradient of 1/r of order n i.e. nabla^n 1/r, which is a n-order symmetric tensor.
 // r is the distance, d is the unit vector
@@ -903,7 +903,7 @@ inline void gradient3(SCAL *grad, int n, VEC d, SCAL r, SCAL c = 1)
 }
 
 __device__
-inline void gradient_coalesced3(SCAL *grad, int n, VEC d, SCAL r, int tid, int bdim, SCAL c = 1)
+inline void gradient_coalesced3(SCAL *__restrict__ grad, int n, VEC d, SCAL r, int tid, int bdim, SCAL c = 1)
 {
 // calculate the gradient of 1/r of order n i.e. nabla^n 1/r, which is a n-order symmetric tensor.
 // r is the distance, d is the unit vector
@@ -971,7 +971,7 @@ inline void gradient_coalesced3(SCAL *grad, int n, VEC d, SCAL r, int tid, int b
 
 template<int n>
 __host__ __device__
-inline void static_gradient3(SCAL *grad, VEC d, SCAL r, SCAL c = 1)
+inline void static_gradient3(SCAL *__restrict__ grad, VEC d, SCAL r, SCAL c = 1)
 {
 // calculate the gradient of 1/r of order n i.e. nabla^n log(r), which is a n-order symmetric tensor.
 // r is the distance, d is the unit vector
@@ -1030,7 +1030,7 @@ inline void static_gradient3(SCAL *grad, VEC d, SCAL r, SCAL c = 1)
 
 template <int n, unsigned bdim>
 __device__
-inline void static_gradient_coalesced3(SCAL *grad, VEC d, SCAL r, unsigned tid, SCAL c = 1)
+inline void static_gradient_coalesced3(SCAL *__restrict__ grad, VEC d, SCAL r, unsigned tid, SCAL c = 1)
 {
 // calculate the gradient of 1/r of order n i.e. nabla^n 1/r, which is a n-order symmetric tensor.
 // r is the distance, d is the unit vector
@@ -1098,7 +1098,7 @@ inline void static_gradient_coalesced3(SCAL *grad, VEC d, SCAL r, unsigned tid, 
 }
 
 __host__ __device__
-inline void tensorpow3(SCAL *power, int n, VEC d)
+inline void tensorpow3(SCAL *__restrict__ power, int n, VEC d)
 {
 // calculate the powers tensor of d of order n, e.g.:
 // r^(0) = 1
@@ -1114,7 +1114,7 @@ inline void tensorpow3(SCAL *power, int n, VEC d)
 }
 
 __host__ __device__
-inline void tracelesspow3(SCAL *power, int n, VEC d, SCAL r)
+inline void tracelesspow3(SCAL *__restrict__ power, int n, VEC d, SCAL r)
 {
 // O(n^3)
 	if (n == 0)
@@ -1145,7 +1145,7 @@ inline void tracelesspow3(SCAL *power, int n, VEC d, SCAL r)
 
 template <int n>
 __host__ __device__
-inline void static_tensorpow3(SCAL *power, VEC d)
+inline void static_tensorpow3(SCAL *__restrict__ power, VEC d)
 {
 // O(n^2)
 	int i = 0;
@@ -1158,7 +1158,7 @@ inline void static_tensorpow3(SCAL *power, VEC d)
 
 template <int n>
 __host__ __device__
-inline void static_tracelesspow3(SCAL *power, VEC d, SCAL r)
+inline void static_tracelesspow3(SCAL *__restrict__ power, VEC d, SCAL r)
 {
 // O(n^3)
 	if constexpr (n == 0)
@@ -1192,7 +1192,7 @@ inline void static_tracelesspow3(SCAL *power, VEC d, SCAL r)
 }
 
 __host__ __device__
-inline void p2m3(SCAL *M, int n, VEC d)
+inline void p2m3(SCAL *__restrict__ M, int n, VEC d)
 {
 // particle to multipole expansion of order n
 // d is the coordinate of the particle from the (near) expansion center
@@ -1205,7 +1205,7 @@ inline void p2m3(SCAL *M, int n, VEC d)
 }
 
 __host__ __device__
-inline void p2m_acc3(SCAL *M, int n, VEC d, SCAL q = 1)
+inline void p2m_acc3(SCAL *__restrict__ M, int n, VEC d, SCAL q = 1)
 {
 // particle to multipole expansion of order n + accumulate to M
 // d is the coordinate of the particle from the (near) expansion center
@@ -1218,7 +1218,7 @@ inline void p2m_acc3(SCAL *M, int n, VEC d, SCAL q = 1)
 }
 
 __host__ __device__
-inline void p2m_traceless_acc3(SCAL *M, int n, VEC d, SCAL r)
+inline void p2m_traceless_acc3(SCAL *__restrict__ M, int n, VEC d, SCAL r)
 {
 // particle to traceless multipole expansion of order n + accumulate to M
 // d is the unit vector of the coordinate of the particle from the (near) expansion center
@@ -1251,7 +1251,7 @@ inline void p2m_traceless_acc3(SCAL *M, int n, VEC d, SCAL r)
 
 template <int n>
 __host__ __device__
-inline void static_p2m_acc3_(SCAL *M, VEC d, SCAL q)
+inline void static_p2m_acc3_(SCAL *__restrict__ M, VEC d, SCAL q)
 {
 	SCAL C = (SCAL)paritysign(n) * (SCAL)inv_factorial(n) * q;
 	int i = 0;
@@ -1263,7 +1263,7 @@ inline void static_p2m_acc3_(SCAL *M, VEC d, SCAL q)
 }
 
 __host__ __device__
-inline void static_p2m_acc3(SCAL *M, int n, VEC d, SCAL q = 1)
+inline void static_p2m_acc3(SCAL *__restrict__ M, int n, VEC d, SCAL q = 1)
 {
 // particle to multipole expansion of order n + accumulate to M
 // d is the coordinate of the particle from the (near) expansion center
@@ -1295,7 +1295,7 @@ inline void static_p2m_acc3(SCAL *M, int n, VEC d, SCAL q = 1)
 }
 
 __host__ __device__
-inline void p2l3(SCAL *L, int n, VEC d, SCAL r)
+inline void p2l3(SCAL *__restrict__ L, int n, VEC d, SCAL r)
 {
 // particle to local expansion of order n
 // d is the unit vector of the coordinate of the particle from the (far) expansion center
@@ -1322,7 +1322,7 @@ inline void m2m3(SCAL *__restrict__ Mout, const SCAL *__restrict__ Mtuple, int n
 			SCAL t{};
 			for (int m = 0; m <= n; ++m)
 			{
-				const SCAL *Mo = Mtuple + symmetricoffset3(n - m);
+				const SCAL *__restrict__ Mo = Mtuple + symmetricoffset3(n - m);
 				SCAL c(0), c2;
 				for (int k1 = 0; k1 <= min(x, m); ++k1)
 				{
@@ -1359,7 +1359,7 @@ inline void m2m_acc3(SCAL *__restrict__ Mout, const SCAL *__restrict__ Mtuple, i
 			SCAL t{};
 			for (int m = 0; m <= n; ++m)
 			{
-				const SCAL *Mo = Mtuple + symmetricoffset3(n - m);
+				const SCAL *__restrict__ Mo = Mtuple + symmetricoffset3(n - m);
 				SCAL c(0), c2;
 				for (int k1 = 0; k1 <= min(x, m); ++k1)
 				{
@@ -1396,7 +1396,7 @@ inline void m2m_traceless_acc3(SCAL *__restrict__ Mout, SCAL *__restrict__ temp,
 		for (int m = 0; m <= n; ++m)
 		{
 			int i = 0;
-			const SCAL *Mo = Mtuple + tracelessoffset3(n - m);
+			const SCAL *__restrict__ Mo = Mtuple + tracelessoffset3(n - m);
 			SCAL C = inv_factorial(m);
 			tracelesspow3(temp, m, d, r);
 			for (int z = 0; z <= 1; ++z)
@@ -1429,7 +1429,7 @@ inline void static_m2m_acc3_(SCAL *__restrict__ Mout, const SCAL *__restrict__ M
 #pragma unroll
 			for (int m = 0; m <= n; ++m)
 			{
-				const SCAL *Mo = Mtuple + symmetricoffset3(n - m);
+				const SCAL *__restrict__ Mo = Mtuple + symmetricoffset3(n - m);
 				SCAL c(0), c2;
 #pragma unroll
 				for (int k1 = 0; k1 <= min(x, m); ++k1)
@@ -1693,7 +1693,7 @@ inline void static_m2l_acc3(SCAL *__restrict__ Ltuple, SCAL *__restrict__ temp,
 
 template <int m, int maxm, int bdim>
 __device__
-inline void static_m2l_coalesced_grad3(SCAL *grad, VEC d, SCAL r, SCAL scal, int tid, int mask)
+inline void static_m2l_coalesced_grad3(SCAL *__restrict__ grad, VEC d, SCAL r, SCAL scal, int tid, int mask)
 {
 	static_gradient_coalesced3<m, bdim>(grad + symmetricoffset3(m), d, r, tid, scal);
 	__syncwarp(mask);
@@ -1980,7 +1980,7 @@ inline VEC l2p_field3(SCAL *__restrict__ temp, const SCAL *__restrict__ Ltuple, 
 }
 
 __host__ __device__
-inline VEC l2p_traceless_field3(SCAL *__restrict__ temp, const SCAL *Ltuple, int nL, VEC d, SCAL r)
+inline VEC l2p_traceless_field3(SCAL *__restrict__ temp, const SCAL *__restrict__ Ltuple, int nL, VEC d, SCAL r)
 {
 // local to particle expansion (for field)
 // Ltuple is a tuple of local expansion tensors of orders from 0 to nL (inclusive)
@@ -2001,7 +2001,7 @@ inline VEC l2p_traceless_field3(SCAL *__restrict__ temp, const SCAL *Ltuple, int
 
 template <int n, int nL, bool traceless>
 __host__ __device__
-inline void static_l2p_field_inner3(SCAL *__restrict__ temp, const SCAL *Ltuple, VEC d, SCAL r)
+inline void static_l2p_field_inner3(SCAL *__restrict__ temp, const SCAL *__restrict__ Ltuple, VEC d, SCAL r)
 {
 	constexpr SCAL C = (SCAL)n;
 	if constexpr (traceless)
@@ -2021,7 +2021,7 @@ inline void static_l2p_field_inner3(SCAL *__restrict__ temp, const SCAL *Ltuple,
 
 template <int nL, bool traceless>
 __host__ __device__
-inline VEC static_l2p_field_3(SCAL *__restrict__ temp, const SCAL *Ltuple, VEC d, SCAL r)
+inline VEC static_l2p_field_3(SCAL *__restrict__ temp, const SCAL *__restrict__ Ltuple, VEC d, SCAL r)
 {
 	for (int i = 0; i < 3; ++i)
 		temp[i] = (SCAL)0;
@@ -2033,7 +2033,7 @@ inline VEC static_l2p_field_3(SCAL *__restrict__ temp, const SCAL *Ltuple, VEC d
 
 template <bool traceless = true>
 __host__ __device__
-inline VEC static_l2p_field3(SCAL *__restrict__ temp, const SCAL *Ltuple, int nL, VEC d, SCAL r = 0)
+inline VEC static_l2p_field3(SCAL *__restrict__ temp, const SCAL *__restrict__ Ltuple, int nL, VEC d, SCAL r = 0)
 {
 // local to particle expansion (for field)
 // Ltuple is a tuple of local expansion tensors of orders from 0 to nL (inclusive)

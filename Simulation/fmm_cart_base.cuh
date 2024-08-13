@@ -19,7 +19,7 @@
 
 #include "kernel.cuh"
 
-__forceinline__ __host__ __device__
+__host__ __device__
 inline SCAL coeff1(int n, int m)
 {
 // a coefficient used in the calculation of the gradient
@@ -31,7 +31,7 @@ inline SCAL coeff1(int n, int m)
 	// for DIM > 3, see Shanker, Huang, 2007
 }
 
-__forceinline__ __host__ __device__
+__host__ __device__
 inline SCAL coeff2(int n, int m)
 {
 // a coefficient used in the calculation of the gradient
@@ -41,7 +41,7 @@ inline SCAL coeff2(int n, int m)
 	return static_factorial(n) * inv_power_of_2(m) * inv_factorial(m) * inv_factorial(n - 2*m);
 }
 
-__forceinline__ __host__ __device__
+__host__ __device__
 inline long long dyn_coeff2(int n, int m)
 {
 // a coefficient used in the calculation of the gradient
@@ -111,13 +111,13 @@ In the following calculations we will use cartesian coordinates.
 
 */
 
-__forceinline__ __host__ __device__
+__host__ __device__
 constexpr int symmetricoffset(int p)
 {
 	return p * (p + 1) / 2;
 }
 
-__forceinline__ __host__ __device__
+__host__ __device__
 constexpr int tracelessoffset(int p)
 {
 	return (p == 0) ? 0 : (2 * p - 1);
@@ -268,13 +268,13 @@ inline void contract_traceless2_ma(SCAL *__restrict__ C, const SCAL *__restrict_
 }
 
 template<typename T>
-__forceinline__ __host__ __device__
+__host__ __device__
 constexpr T static_min(T a, T b)
 {
 	return (a < b) ? a : b;
 }
 template<typename T>
-__forceinline__ __host__ __device__
+__host__ __device__
 constexpr T static_max(T a, T b)
 {
 	return (a < b) ? b : a;

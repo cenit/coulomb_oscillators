@@ -211,9 +211,9 @@ inline __host__ __device__ void direct3_core(const ALIGNED_VEC *__restrict__ p, 
 #if DIM == 2
 			VEC y = d * invDist2 - c;
 #elif DIM == 3
-			VEC y = d * invDist2 * sqrt(invDist2) - c;
+			VEC y = d * (invDist2 * sqrt(invDist2)) - c;
 #else // DIM == 4
-			VEC y = d * invDist2 * invDist2 - c;
+			VEC y = d * (invDist2 * invDist2) - c;
 #endif
 			VEC t = atmp + y;
 			c = (t - atmp) - y;
