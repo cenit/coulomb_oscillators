@@ -42,7 +42,7 @@ inline SCAL coeff2(int n, int m)
 }
 
 __forceinline__ __host__ __device__
-inline long long coeff2_accurate(int n, int m)
+inline long long dyn_coeff2(int n, int m)
 {
 // a coefficient used in the calculation of the gradient
 // returns n! / (2^m * m! * (n - 2m)!) = n! / ((2m)!! * (n - 2m)!)

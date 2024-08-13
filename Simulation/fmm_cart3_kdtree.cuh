@@ -804,7 +804,7 @@ void fmm_c2c3_kdtree_coalesced(fmmTree_kd tree, const int2 *m2l_list, const int 
 			sloc[j] = 0;
 		__syncwarp(loop_mask);
 		SCAL mp = SCAL(1) / smp[0];
-		m2l_acc_coalesced_tuple3<false, true>(sloc, temp, smp, tree.p-1, tree.p, d, r, lid, wdim, loop_mask, 1, tree.p);
+		static_m2l_acc_coalesced3<1, -2, false, true>(sloc, temp, smp, tree.p, d, r, lid, wdim, loop_mask);
 		for (int j = 1+lid; j < offL; j += wdim)
 			myAtomicAdd(loc1 + j, sloc[j]);
 		__syncwarp(loop_mask);
@@ -815,7 +815,7 @@ void fmm_c2c3_kdtree_coalesced(fmmTree_kd tree, const int2 *m2l_list, const int 
 		__syncwarp(loop_mask);
 		mp *= smp[0];
 		if (tree.p >= 3)
-			m2l_acc_coalesced_tuple3<false, true>(sloc, temp, smp, tree.p-1, tree.p, -d, r, lid, wdim, loop_mask, 1, tree.p, tree.p-2);
+			static_m2l_acc_coalesced3<1, -2, false, true, -2>(sloc, temp, smp, tree.p, -d, r, lid, wdim, loop_mask);
 		for (int j = 1+lid; j < offL2; j += wdim)
 			myAtomicAdd(loc2 + j, sloc[j]);
 		for (int j = offL2+lid; j < offL; j += wdim)
@@ -1954,12 +1954,7 @@ void fmm_cart3_kdtree(ALIGNED_VEC *p, ALIGNED_VEC *a, int n, const SCAL* param)
 		}
 	}
 
-	if (true)
-	{
-		smemSize = c2c1_smem(c2c1_bt.y);
-		fmm_c2c3_kdtree_coalesced <<< c2c1_bt.x, c2c1_bt.y, smemSize >>> (tree, d_m2l_list, d_m2l_n, EPS2);
-	}
-	else if (symmetricoffset3(order) >= 64)
+	if (symmetricoffset3(order) >= 64)
 	{
 		smemSize = c2c2_smem(c2c2_bt.y);
 		fmm_c2c3_kdtree2 <<< c2c2_bt.x, c2c2_bt.y, smemSize >>> (tree, d_m2l_list, d_m2l_n, EPS2);
