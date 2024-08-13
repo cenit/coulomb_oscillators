@@ -643,14 +643,13 @@ void fmm_dualTraversal_cpu(const fmmTree_kd& tree, std::vector<int2>& p2p_list, 
 }
 
 __global__
-inline  void fmm_c2c3_kdtree_krnl(fmmTree_kd tree, const int2 *__restrict__ m2l_list, const int *__restrict__ m2l_n, SCAL d_EPS2)
+void fmm_c2c3_kdtree(fmmTree_kd tree, const int2 *__restrict__ m2l_list, const int *__restrict__ m2l_n, SCAL d_EPS2)
 {
 // cell to cell interaction
 	int offM = symmetricoffset3(tree.p);
 	int offL = tracelessoffset3(tree.p+1);
 	int offL2 = tracelessoffset3(tree.p-1);
 
-#ifdef __CUDA_ARCH__
 	int tempsize = (tree.p+1)*(tree.p+2)/2;
 	int soffM = offM;
 	int soffL = offL;
@@ -664,7 +663,6 @@ inline  void fmm_c2c3_kdtree_krnl(fmmTree_kd tree, const int2 *__restrict__ m2l_
 	SCAL *__restrict__ tempi = smems + tempsize*threadIdx.x;
 	SCAL *__restrict__ smp = smems + tempsize*blockDim.x + soffM*threadIdx.x;
 	SCAL *__restrict__ sloc = smems + (tempsize+soffM)*blockDim.x + soffL*threadIdx.x;
-#endif
 
 	for (int i = blockDim.x * blockIdx.x + threadIdx.x; i < *m2l_n; i += gridDim.x * blockDim.x)
 	{
@@ -828,6 +826,31 @@ void fmm_c2c3_kdtree_coalesced(fmmTree_kd tree, const int2 *m2l_list, const int 
 	}
 }
 
+void fmm_c2c3_kdtree_cpu_thread(fmmTree_kd tree, const int2 *m2l_list, SCAL d_EPS2, int begi, int endi, int stride, SCAL *tempi)
+{
+// cell to cell interaction
+	int offM = symmetricoffset3(tree.p);
+	int offL = tracelessoffset3(tree.p+1);
+	int offL2 = tracelessoffset3(tree.p-1);
+
+	for (int i = begi; i < endi; i += stride)
+	{
+		int n1 = m2l_list[i].x;
+		int n2 = m2l_list[i].y;
+		const SCAL *__restrict__ mp1 = tree.mpole + n1*offM;
+		const SCAL *__restrict__ mp2 = tree.mpole + n2*offM;
+		SCAL *__restrict__ loc1 = tree.local + n1*offL;
+		SCAL *__restrict__ loc2 = tree.local + n2*offL;
+
+		VEC d = aligned_load(tree.center[n1]) - aligned_load(tree.center[n2]);
+		SCAL r = sqrt(dot(d, d) + d_EPS2);
+		d /= r;
+
+		static_m2l_acc3<1, -2, false, true, true>(loc1, tempi, mp2, tree.p, d, r);
+		static_m2l_acc3<1, -2, false, true, true>(loc2, tempi, mp1, tree.p, -d, r);
+	}
+}
+
 void fmm_c2c3_kdtree_cpu(fmmTree_kd tree, const int2 *m2l_list, const int *m2l_n, SCAL d_EPS2)
 {
 	std::vector<std::thread> threads(CPU_THREADS);
@@ -836,7 +859,7 @@ void fmm_c2c3_kdtree_cpu(fmmTree_kd tree, const int2 *m2l_list, const int *m2l_n
 		temp[i] = new SCAL[(tree.p+1)*(tree.p+2)/2 + CACHE_LINE_SIZE/sizeof(SCAL)];
 	int niter = (*m2l_n-1)/CPU_THREADS+1;
 	for (int i = 0; i < CPU_THREADS; ++i)
-		threads[i] = std::thread(fmm_c2c3_kdtree_krnl, tree, m2l_list, d_EPS2, niter*i, std::min(niter*(i+1), *m2l_n), 1, temp[i]);
+		threads[i] = std::thread(fmm_c2c3_kdtree_cpu_thread, tree, m2l_list, d_EPS2, niter*i, std::min(niter*(i+1), *m2l_n), 1, temp[i]);
 	for (int i = 0; i < CPU_THREADS; ++i)
 		threads[i].join();
 	for (int i = 0; i < CPU_THREADS; ++i)
