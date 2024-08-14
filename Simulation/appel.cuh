@@ -24,14 +24,14 @@
 struct Tree
 {
 	ALIGNED_VEC *__restrict__ center, *__restrict__ field;
-	SCAL *__restrict__ mpole;
+	SCAL *mpole;
 	int *__restrict__ mult, *__restrict__ index;
 };
 // "index" will be the index of the first element that belongs to the node
 // Sorting the particle array will be needed in order to avoid slow random access.
 
 __global__
-void printp(const ALIGNED_VEC *__restrict__ p, int n)
+void printp(const ALIGNED_VEC *p, int n)
 {
 // print positions of all particles, for debug purposes
 	for (int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -43,8 +43,7 @@ void printp(const ALIGNED_VEC *__restrict__ p, int n)
 }
 
 __host__ __device__
-inline void evalKeys_krnl(int *__restrict__ keys, const ALIGNED_VEC *__restrict__ p, const ALIGNED_VEC *__restrict__ min,
-                          SCAL rdelta, int side,
+inline void evalKeys_krnl(int *keys, const ALIGNED_VEC *p, const ALIGNED_VEC *min, SCAL rdelta, int side,
                           int begi, int endi, int stride)
 {
 // put particle i in box keys[i]
@@ -58,12 +57,12 @@ inline void evalKeys_krnl(int *__restrict__ keys, const ALIGNED_VEC *__restrict_
 }
 
 __global__
-void evalKeys(int *__restrict__ keys, const ALIGNED_VEC *__restrict__ p, const ALIGNED_VEC *__restrict__ min, int n, SCAL rdelta, int side)
+void evalKeys(int *keys, const ALIGNED_VEC *p, const ALIGNED_VEC *min, int n, SCAL rdelta, int side)
 {
 	evalKeys_krnl(keys, p, min, rdelta, side, blockDim.x * blockIdx.x + threadIdx.x, n, gridDim.x * blockDim.x);
 }
 
-void evalKeys_cpu(int *__restrict__ keys, const ALIGNED_VEC *__restrict__ p, const ALIGNED_VEC *__restrict__ min, int n, SCAL rdelta, int side)
+void evalKeys_cpu(int *keys, const ALIGNED_VEC *p, const ALIGNED_VEC *min, int n, SCAL rdelta, int side)
 {
 	std::vector<std::thread> threads(CPU_THREADS);
 	int niter = (n-1)/CPU_THREADS+1;
@@ -74,7 +73,7 @@ void evalKeys_cpu(int *__restrict__ keys, const ALIGNED_VEC *__restrict__ p, con
 }
 
 __host__ __device__
-inline void evalIndices_krnl(int *__restrict__ ind, int begi, int endi, int stride)
+inline void evalIndices_krnl(int *ind, int begi, int endi, int stride)
 {
 // will be used to know the index after the particles are sorted,
 // so that also p, v, a can be sorted accordingly
@@ -83,12 +82,12 @@ inline void evalIndices_krnl(int *__restrict__ ind, int begi, int endi, int stri
 }
 
 __global__
-void evalIndices(int *__restrict__ ind, int n)
+void evalIndices(int *ind, int n)
 {
 	evalIndices_krnl(ind, blockDim.x * blockIdx.x + threadIdx.x, n, gridDim.x * blockDim.x);
 }
 
-void evalIndices_cpu(int *__restrict__ ind, int n)
+void evalIndices_cpu(int *ind, int n)
 {
 	std::vector<std::thread> threads(CPU_THREADS);
 	int niter = (n-1)/CPU_THREADS+1;
@@ -140,7 +139,7 @@ inline int tree_side(int l)
 }
 
 __global__
-void initLeaves(ALIGNED_VEC *__restrict__ center, int m)
+void initLeaves(ALIGNED_VEC *center, int m)
 {
 	for (int i = blockDim.x * blockIdx.x + threadIdx.x;
 	     i < m;
@@ -180,12 +179,12 @@ inline void indexLeaves_krnl(int *__restrict__ index, const int *__restrict__ ke
 }
 
 __global__
-void indexLeaves(int *__restrict__ index, const int *__restrict__ keys, int m, int n)
+void indexLeaves(int *index, const int *keys, int m, int n)
 {
 	indexLeaves_krnl(index, keys, m, n, blockDim.x * blockIdx.x + threadIdx.x, n, gridDim.x * blockDim.x);
 }
 
-void indexLeaves_cpu(int *__restrict__ index, const int *__restrict__ keys, int m, int n)
+void indexLeaves_cpu(int *index, const int *keys, int m, int n)
 {
 	std::vector<std::thread> threads(CPU_THREADS);
 	int niter = (n-1)/CPU_THREADS+1;
@@ -212,12 +211,12 @@ inline void multLeaves_krnl(int *__restrict__ mult, const int *__restrict__ inde
 }
 
 __global__
-void multLeaves(int *__restrict__ mult, const int *__restrict__ index, int m, int n)
+void multLeaves(int *mult, const int *index, int m, int n)
 {
 	multLeaves_krnl(mult, index, m, n, blockDim.x * blockIdx.x + threadIdx.x, m, gridDim.x * blockDim.x);
 }
 
-void multLeaves_cpu(int *__restrict__ mult, const int *__restrict__ index, int m, int n)
+void multLeaves_cpu(int *mult, const int *index, int m, int n)
 {
 	std::vector<std::thread> threads(CPU_THREADS);
 	int niter = (m-1)/CPU_THREADS+1;
@@ -228,7 +227,7 @@ void multLeaves_cpu(int *__restrict__ mult, const int *__restrict__ index, int m
 }
 
 __global__
-void monopoleLeaves(SCAL *__restrict__ monopole, const int *__restrict__ mult, int m)
+void monopoleLeaves(SCAL *monopole, const int *mult, int m)
 {
 // calculate monopoles for each cell
 // if all particles have the same charge/mass, then they are proportional to multiplicities
@@ -241,7 +240,7 @@ void monopoleLeaves(SCAL *__restrict__ monopole, const int *__restrict__ mult, i
 }
 
 __host__ __device__
-inline void centerLeaves_krnl(ALIGNED_VEC *__restrict__ center, const int *__restrict__ mult, const int *__restrict__ index,
+inline void centerLeaves_krnl(ALIGNED_VEC *__restrict__ center, const int *mult, const int *index,
                               const ALIGNED_VEC *__restrict__ p, int begi, int endi, int stride)
 {
 // calculate the center of charge/mass for each cell
@@ -251,7 +250,7 @@ inline void centerLeaves_krnl(ALIGNED_VEC *__restrict__ center, const int *__res
 		VEC t{};
 		if (mlt > 0)
 		{
-			const ALIGNED_VEC *__restrict__ pi = p + index[i];
+			const ALIGNED_VEC *pi = p + index[i];
 			for (int j = 0; j < mlt; ++j)
 				t += aligned_load(pi[j]);
 			t /= (SCAL)mlt;
@@ -261,14 +260,12 @@ inline void centerLeaves_krnl(ALIGNED_VEC *__restrict__ center, const int *__res
 }
 
 __global__
-void centerLeaves(ALIGNED_VEC *__restrict__ center, const int *__restrict__ mult, const int *__restrict__ index,
-                  const ALIGNED_VEC *__restrict__ p, int m)
+void centerLeaves(ALIGNED_VEC *center, const int *mult, const int *index, const ALIGNED_VEC *p, int m)
 {
 	centerLeaves_krnl(center, mult, index, p, blockDim.x * blockIdx.x + threadIdx.x, m, gridDim.x * blockDim.x);
 }
 
-void centerLeaves_cpu(ALIGNED_VEC *__restrict__ center, const int *__restrict__ mult, const int *__restrict__ index,
-                      const ALIGNED_VEC *__restrict__ p, int m)
+void centerLeaves_cpu(ALIGNED_VEC *center, const int *mult, const int *index, const ALIGNED_VEC *p, int m)
 {
 	std::vector<std::thread> threads(CPU_THREADS);
 	int niter = (m-1)/CPU_THREADS+1;
@@ -279,7 +276,7 @@ void centerLeaves_cpu(ALIGNED_VEC *__restrict__ center, const int *__restrict__ 
 }
 
 __host__ __device__
-inline void p2p2_krnl(ALIGNED_VEC *__restrict__ a, const int *__restrict__ mult, const int *__restrict__ index,
+inline void p2p2_krnl(ALIGNED_VEC *__restrict__ a, const int *mult, const int *index,
                       const ALIGNED_VEC *__restrict__ p, int side, int radius, SCAL d_EPS2,
                       int begi, int endi, int stride)
 {
@@ -296,8 +293,8 @@ inline void p2p2_krnl(ALIGNED_VEC *__restrict__ a, const int *__restrict__ mult,
 		int lmin = ((j-radius > 0) ? (j-radius) : 0),
 		    lmax = ((j+radius < side-1) ? (j+radius) : (side-1));
 		int mlt1 = mult[ij];
-		const ALIGNED_VEC *__restrict__ p1 = p + ind1;
-		ALIGNED_VEC *__restrict__ a1 = a + ind1;
+		const ALIGNED_VEC *p1 = p + ind1;
+		ALIGNED_VEC *a1 = a + ind1;
 		for (int h = 0; h < mlt1; ++h)
 		{
 			VEC atmp{}, p1h = aligned_load(p1[h]);
@@ -306,8 +303,8 @@ inline void p2p2_krnl(ALIGNED_VEC *__restrict__ a, const int *__restrict__ mult,
 				int klT = k*side+lmin;
 				int indT = index[klT];
 				int mltT = mult[klT];
-				const int *__restrict__ multT = mult + klT;
-				const ALIGNED_VEC *__restrict__ pT = p + indT;
+				const int *multT = mult + klT;
+				const ALIGNED_VEC *pT = p + indT;
 				for (int l = 1; l <= lmax - lmin; ++l)
 					mltT += multT[l];
 				for (int g = 0; g < mltT; ++g)
@@ -325,14 +322,12 @@ inline void p2p2_krnl(ALIGNED_VEC *__restrict__ a, const int *__restrict__ mult,
 }
 
 __global__
-void p2p2(ALIGNED_VEC *__restrict__ a, const int *__restrict__ mult, const int *__restrict__ index,
-          const ALIGNED_VEC *__restrict__ p, int m, int side, int radius, SCAL d_EPS2)
+void p2p2(ALIGNED_VEC *a, const int *mult, const int *index, const ALIGNED_VEC *p, int m, int side, int radius, SCAL d_EPS2)
 {
 	p2p2_krnl(a, mult, index, p, side, radius, d_EPS2, blockDim.x * blockIdx.x + threadIdx.x, m, gridDim.x * blockDim.x);
 }
 
-void p2p2_cpu(ALIGNED_VEC *__restrict__ a, const int *__restrict__ mult, const int *__restrict__ index,
-              const ALIGNED_VEC *__restrict__ p, int m, int side, int radius, SCAL d_EPS2)
+void p2p2_cpu(ALIGNED_VEC *a, const int *mult, const int *index, const ALIGNED_VEC *p, int m, int side, int radius, SCAL d_EPS2)
 {
 	std::vector<std::thread> threads(CPU_THREADS);
 	int niter = (m-1)/CPU_THREADS+1;
@@ -343,7 +338,7 @@ void p2p2_cpu(ALIGNED_VEC *__restrict__ a, const int *__restrict__ mult, const i
 }
 
 __host__ __device__
-inline void p2p3_krnl(ALIGNED_VEC *__restrict__ a, const int *__restrict__ mult, const int *__restrict__ index,
+inline void p2p3_krnl(ALIGNED_VEC *__restrict__ a, const int *mult, const int *index,
                       const ALIGNED_VEC *__restrict__ p, int side, int radius, SCAL d_EPS2,
                       int begi, int endi, int stride)
 {
@@ -362,8 +357,8 @@ inline void p2p3_krnl(ALIGNED_VEC *__restrict__ a, const int *__restrict__ mult,
 		int zmin = ((k-radius > 0) ? (k-radius) : 0),
 		    zmax = ((k+radius < side-1) ? (k+radius) : (side-1));
 		int mlt1 = mult[ijk];
-		const ALIGNED_VEC *__restrict__ p1 = p + ind1;
-		ALIGNED_VEC *__restrict__ a1 = a + ind1;
+		const ALIGNED_VEC *p1 = p + ind1;
+		ALIGNED_VEC *a1 = a + ind1;
 		for (int h = 0; h < mlt1; ++h)
 		{
 			VEC atmp{}, p1h = aligned_load(p1[h]);
@@ -373,8 +368,8 @@ inline void p2p3_krnl(ALIGNED_VEC *__restrict__ a, const int *__restrict__ mult,
 					int klT = x*side*side+y*side+zmin;
 					int indT = index[klT];
 					int mltT = mult[klT];
-					const int *__restrict__ multT = mult + klT;
-					const ALIGNED_VEC *__restrict__ pT = p + indT;
+					const int *multT = mult + klT;
+					const ALIGNED_VEC *pT = p + indT;
 					for (int z = 1; z <= zmax - zmin; ++z)
 						mltT += multT[z];
 					for (int g = 0; g < mltT; ++g)
@@ -392,14 +387,12 @@ inline void p2p3_krnl(ALIGNED_VEC *__restrict__ a, const int *__restrict__ mult,
 }
 
 __global__
-void p2p3(ALIGNED_VEC *__restrict__ a, const int *__restrict__ mult, const int *__restrict__ index,
-          const ALIGNED_VEC *__restrict__ p, int m, int side, int radius, SCAL d_EPS2)
+void p2p3(ALIGNED_VEC *a, const int *mult, const int *index, const ALIGNED_VEC *p, int m, int side, int radius, SCAL d_EPS2)
 {
 	p2p3_krnl(a, mult, index, p, side, radius, d_EPS2, blockDim.x * blockIdx.x + threadIdx.x, m, gridDim.x * blockDim.x);
 }
 
-void p2p3_cpu(ALIGNED_VEC *__restrict__ a, const int *__restrict__ mult, const int *__restrict__ index,
-              const ALIGNED_VEC *__restrict__ p, int m, int side, int radius, SCAL d_EPS2)
+void p2p3_cpu(ALIGNED_VEC *a, const int *mult, const int *index, const ALIGNED_VEC *p, int m, int side, int radius, SCAL d_EPS2)
 {
 	std::vector<std::thread> threads(CPU_THREADS);
 	int niter = (m-1)/CPU_THREADS+1;
@@ -522,7 +515,7 @@ void pushl(Tree tree, int l)
 
 __global__
 void pushLeaves(ALIGNED_VEC *__restrict__ a, const ALIGNED_VEC *__restrict__ field,
-                const int *__restrict__ mult, const int *__restrict__ index, int m)
+                const int *mult, const int *index, int m)
 {
 // push informations about the field from leaves to individual particles
 	for (int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -530,14 +523,14 @@ void pushLeaves(ALIGNED_VEC *__restrict__ a, const ALIGNED_VEC *__restrict__ fie
 	     i += gridDim.x * blockDim.x)
 	{
 		int mlt = mult[i];
-		ALIGNED_VEC *__restrict__ ai = a + index[i];
+		ALIGNED_VEC *ai = a + index[i];
 		for (int j = 0; j < mlt; ++j)
 			ai[j] = aligned_store(aligned_load(ai[j]) + aligned_load(field[i]));
 	}
 }
 
 __host__ __device__
-inline void rescale_krnl(ALIGNED_VEC *__restrict__ a, const SCAL *__restrict__ param, int begi, int endi, int stride)
+inline void rescale_krnl(ALIGNED_VEC *a, const SCAL *param, int begi, int endi, int stride)
 {
 // rescale accelerations by a factor
 	SCAL c = param[0];
@@ -546,12 +539,12 @@ inline void rescale_krnl(ALIGNED_VEC *__restrict__ a, const SCAL *__restrict__ p
 }
 
 __global__
-void rescale(ALIGNED_VEC *__restrict__ a, int n, const SCAL *__restrict__ param)
+void rescale(ALIGNED_VEC *a, int n, const SCAL *param)
 {
 	rescale_krnl(a, param, blockDim.x * blockIdx.x + threadIdx.x, n, gridDim.x * blockDim.x);
 }
 
-void rescale_cpu(ALIGNED_VEC *__restrict__ a, int n, const SCAL *__restrict__ param)
+void rescale_cpu(ALIGNED_VEC *a, int n, const SCAL *param)
 {
 	std::vector<std::thread> threads(CPU_THREADS);
 	int niter = (n-1)/CPU_THREADS+1;
@@ -561,7 +554,7 @@ void rescale_cpu(ALIGNED_VEC *__restrict__ a, int n, const SCAL *__restrict__ pa
 		threads[i].join();
 }
 
-void appel(ALIGNED_VEC *__restrict__ p, ALIGNED_VEC *__restrict__ a, int n, const SCAL* param)
+void appel(ALIGNED_VEC *p, ALIGNED_VEC *a, int n, const SCAL* param)
 {
 	int nBlocks = std::min(MAX_GRID_SIZE, (n + BLOCK_SIZE - 1) / BLOCK_SIZE);
 	int radius = tree_radius;

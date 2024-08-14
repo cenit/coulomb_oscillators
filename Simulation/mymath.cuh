@@ -443,13 +443,7 @@ __constant__ constexpr SCAL d_contract_coeff[]{
 };
 
 __host__ __device__
-constexpr int greater_equal_odd(int n)
-{
-	return (n & 1) ? n : n+1;
-}
-
-__host__ __device__
-constexpr long long factorial(int n)
+inline long long factorial(int n)
 {
 // factorial
 // returns n!
@@ -461,7 +455,7 @@ constexpr long long factorial(int n)
 }
 
 __host__ __device__
-constexpr long long dfactorial(int n)
+inline long long dfactorial(int n)
 {
 // double factorial
 // returns n!!
@@ -473,7 +467,7 @@ constexpr long long dfactorial(int n)
 }
 
 __host__ __device__ 
-constexpr int binomial(int n, int k)
+inline int binomial(int n, int k)
 {
 // binomial coefficient
 // returns n! / (k! * (n-k)!)
@@ -487,7 +481,7 @@ constexpr int binomial(int n, int k)
 }
 
 __host__ __device__
-constexpr int trinomial(int n, int j, int k)
+inline int trinomial(int n, int j, int k)
 {
 // trinomial coefficient
 // returns n! / (j! * k! * (n-j-k)!)
@@ -506,7 +500,7 @@ constexpr int trinomial(int n, int j, int k)
 }
 
 __host__ __device__
-constexpr long long factorialfrac(int n, int k)
+inline long long factorialfrac(int n, int k)
 {
 // division between two factorials
 // returns n! / k!
@@ -518,7 +512,7 @@ constexpr long long factorialfrac(int n, int k)
 }
 
 __host__ __device__
-constexpr int paritysign(int n)
+inline int paritysign(int n)
 {
 // (-1)^n
 // returns 1 if n is even and -1 if n is odd
@@ -547,7 +541,7 @@ inline SCAL binarypow(SCAL x, int n)
 }
 
 __host__ __device__
-constexpr SCAL static_factorial(int n)
+inline SCAL static_factorial(int n)
 {
 #ifdef __CUDA_ARCH__
 	return d_factorial[n];
@@ -557,7 +551,7 @@ constexpr SCAL static_factorial(int n)
 }
 
 __host__ __device__
-constexpr SCAL static_edfactorial(int n)
+inline SCAL static_edfactorial(int n)
 {
 #ifdef __CUDA_ARCH__
 	return d_edfactorial[n>>1];
@@ -567,7 +561,7 @@ constexpr SCAL static_edfactorial(int n)
 }
 
 __host__ __device__
-constexpr SCAL static_odfactorial(int n)
+inline SCAL static_odfactorial(int n)
 {
 #ifdef __CUDA_ARCH__
 	return d_odfactorial[n>>1];
@@ -577,7 +571,7 @@ constexpr SCAL static_odfactorial(int n)
 }
 
 __host__ __device__
-constexpr SCAL power_of_2(int n)
+inline SCAL power_of_2(int n)
 {
 #ifdef __CUDA_ARCH__
 	return d_power_of_2[n];
@@ -587,7 +581,7 @@ constexpr SCAL power_of_2(int n)
 }
 
 __host__ __device__
-constexpr SCAL inv_factorial(int n)
+inline SCAL inv_factorial(int n)
 {
 #ifdef __CUDA_ARCH__
 	return d_inv_factorial[n];
@@ -597,7 +591,7 @@ constexpr SCAL inv_factorial(int n)
 }
 
 __host__ __device__
-constexpr SCAL inv_power_of_2(int n)
+inline SCAL inv_power_of_2(int n)
 {
 #ifdef __CUDA_ARCH__
 	return d_inv_power_of_2[n];
@@ -607,17 +601,17 @@ constexpr SCAL inv_power_of_2(int n)
 }
 
 __host__ __device__
-constexpr int flatten(int2 v, int s)
+inline int flatten(int2 v, int s)
 {
 	return v.x * s + v.y;
 }
 __host__ __device__
-constexpr int flatten(int3 v, int s)
+inline int flatten(int3 v, int s)
 {
 	return (v.x * s + v.y) * s + v.z;
 }
 __host__ __device__
-constexpr int flatten(int4 v, int s)
+inline int flatten(int4 v, int s)
 {
 	return ((v.x * s + v.y) * s + v.z) * s + v.w;
 }

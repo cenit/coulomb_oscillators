@@ -30,7 +30,7 @@
 #endif
 
 __host__ __device__
-constexpr bool isPow2(unsigned int x)
+inline bool isPow2(unsigned int x)
 {
     return (x&(x-1))==0;
 }

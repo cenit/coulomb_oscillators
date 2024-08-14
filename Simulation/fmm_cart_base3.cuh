@@ -21,10 +21,8 @@
 
 #include "fmm_cart_base.cuh"
 
-#pragma warning disable 4068 // disable unknown pragma warning for MSVC
-
 __host__ __device__
-constexpr SCAL coeff13(int n, int m)
+inline SCAL coeff13(int n, int m)
 {
 // a coefficient used in the calculation of the gradient
 // returns (-1)^m * (2n - 2m - 1)!!
@@ -34,7 +32,7 @@ constexpr SCAL coeff13(int n, int m)
 }
 
 __host__ __device__
-constexpr SCAL dyn_coeff13(int n, int m)
+inline SCAL dyn_coeff13(int n, int m)
 {
 // a coefficient used in the calculation of the gradient
 // returns (-1)^m * (2n - 2m - 1)!!
