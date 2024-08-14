@@ -21,6 +21,8 @@
 
 #include "fmm_cart_base.cuh"
 
+#pragma warning disable 4068 // disable unknown pragma warning for MSVC
+
 __host__ __device__
 constexpr SCAL coeff13(int n, int m)
 {

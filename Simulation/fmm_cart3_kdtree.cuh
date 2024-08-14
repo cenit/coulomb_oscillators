@@ -813,6 +813,8 @@ void fmm_c2c3_kdtree(fmmTree_kd tree, const int2 *__restrict__ m2l_list, const i
 	SCAL *__restrict__ smp = smems + tempsize*blockDim.x + soffM*threadIdx.x;
 	SCAL *__restrict__ sloc = smems + (tempsize+soffM)*blockDim.x + soffL*threadIdx.x;
 
+	//SCAL lmp[offM];
+
 	for (int i = blockDim.x * blockIdx.x + threadIdx.x; i < *m2l_n; i += gridDim.x * blockDim.x)
 	{
 		int n1 = m2l_list[i].x;
@@ -936,27 +938,27 @@ void fmm_c2c3_kdtree_gpu(fmmTree_kd tree, const int2 *__restrict__ m2l_list, con
 	{
 		int smemSize;
 		case 1:
-			smemSize = c2c0_smem_template<1>(c2c_bt[1].x);
+			smemSize = c2c0_smem_template<1>(c2c_bt[1].y);
 			fmm_c2c3_kdtree<1> <<< c2c_bt[1].x, c2c_bt[1].y, smemSize >>> (tree, m2l_list, m2l_n, d_EPS2);
 			break;
 		case 2:
-			smemSize = c2c0_smem_template<2>(c2c_bt[2].x);
+			smemSize = c2c0_smem_template<2>(c2c_bt[2].y);
 			fmm_c2c3_kdtree<2> <<< c2c_bt[2].x, c2c_bt[2].y, smemSize >>> (tree, m2l_list, m2l_n, d_EPS2);
 			break;
 		case 3:
-			smemSize = c2c0_smem_template<3>(c2c_bt[3].x);
+			smemSize = c2c0_smem_template<3>(c2c_bt[3].y);
 			fmm_c2c3_kdtree<3> <<< c2c_bt[3].x, c2c_bt[3].y, smemSize >>> (tree, m2l_list, m2l_n, d_EPS2);
 			break;
 		case 4:
-			smemSize = c2c0_smem_template<4>(c2c_bt[4].x);
+			smemSize = c2c0_smem_template<4>(c2c_bt[4].y);
 			fmm_c2c3_kdtree<4> <<< c2c_bt[4].x, c2c_bt[4].y, smemSize >>> (tree, m2l_list, m2l_n, d_EPS2);
 			break;
 		case 5:
-			smemSize = c2c0_smem_template<5>(c2c_bt[5].x);
+			smemSize = c2c0_smem_template<5>(c2c_bt[5].y);
 			fmm_c2c3_kdtree<5> <<< c2c_bt[5].x, c2c_bt[5].y, smemSize >>> (tree, m2l_list, m2l_n, d_EPS2);
 			break;
 		default:
-			smemSize = c2c0_smem(c2c_bt[0].x);
+			smemSize = c2c0_smem(c2c_bt[0].y);
 			fmm_c2c3_kdtree_default <<< c2c_bt[0].x, c2c_bt[0].y, smemSize >>> (tree, m2l_list, m2l_n, d_EPS2);
 			break;
 	}

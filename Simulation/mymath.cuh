@@ -649,17 +649,17 @@ inline SCAL fmin(VEC_T(SCAL, 4) a)
 }
 
 __host__ __device__
-constexpr int2 to_ivec(VEC_T(SCAL, 2) a)
+inline int2 to_ivec(VEC_T(SCAL, 2) a)
 {
 	return make_int2((int)a.x, (int)a.y);
 }
 __host__ __device__
-constexpr int3 to_ivec(VEC_T(SCAL, 3) a)
+inline int3 to_ivec(VEC_T(SCAL, 3) a)
 {
 	return make_int3((int)a.x, (int)a.y, (int)a.z);
 }
 __host__ __device__
-constexpr int4 to_ivec(VEC_T(SCAL, 4) a)
+inline int4 to_ivec(VEC_T(SCAL, 4) a)
 {
 	return make_int4((int)a.x, (int)a.y, (int)a.z, (int)a.w);
 }
